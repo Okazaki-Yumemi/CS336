@@ -106,3 +106,65 @@ Subword tokenization 是在 charater-level 和 word-level中的一个折中。 �
 For example, if the byte sequence `b'the'` often occurs in our raw text training data,assigning it an entry in the vocabulary would reduce this 3-token sequence to a single token.
 
 为了寻找subword tokens， 于是BPE就诞生了
+
+## 2.4 BPE Tokenizer Training
+Three main steps.
+
+1. Vocabulary initialization: initial vocabulary is the set of all bytes. initial vocabulary is of size 256.
+2. Pre-tokenization: count how often btyes occur next to each other in your text and begin merging them starting with the most frequent pair of bytes.
+But there is a problem: first it's too slow. and directly merging bytes across the corpus may result in tokens that differ only in punctuation.
+
+To avoid this,we pre-tokenize the corpus. 
+
+最简单的pre-tokenization方法就是 splitting on whitespace. like `s.split()`
+
+Most modern tokenizers use a regex-based pre-tokenizer.
+```py
+>>> PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
+>>> import regex as re
+>>> re.findall(PAT,"some text that i'll pre-tokenize")
+['some', ' text',' that', ' i', "'ll", ' pre', '-', 'tokenize']
+```
+
+3. Compute BPE merges: 我们一般不考虑 在pre-token之间出现的pair. 然后在计算merge的时候，deterministically break ties in pair frequency by prefering the lexicographically greater pair.(这个词的意思是: 字典序更大的pair)
+
+For example,如果  (“A”, “B”), (“A”, “C”), (“B”, “ZZ”), and (“BA”, “A”) 都出现了，
+
+我们选择 ("BA", "A") 作为merge pair, 因为它是字典序最大的pair. (先比较第一个，第一个相同再比较第二个)
+```py
+>>> max([("A", "B"), ("A", "C"), ("B", "ZZ"), ("BA", "A")])
+('BA', 'A')
+```
+
+**Example(bpe_example)：BPE Training example**:
+corpus consisting of the following text
+```
+low low low low low
+lower lower widest widest widest
+newest newest newest newest newest newest
+```
+and the vocabulary has a special token <|endoftext|>
+
+**Vocabulary**
+We initiallize our vocabulary with our special token <|endoftext|> and all the 256 bytes
+
+**Pre-tokenization**
+为了方便假设其为空格分界
+我们可以得到
+{low: 5 , lower: 2, widest: 3, newest: 6}
+
+用 `dict[tuple[bytes,...],int]` 来标识. eg. `dict[("l","o","w"),5]` 表示 "low" 出现了5次
+
+**Merges**
+We first look at every successive pair of bytes and sum the frequency of the words where they appear.
+
+{lo: 7, ow: 7, we: 8, er: 2, wi: 3, id: 3, de: 3, es: 9, st: 9, ne: 6, ew: 6}
+
+第一步，我们选择('s','t')作为merge pair, 因为它出现了9次，且是字典序最大的pair. 然后我们将所有的('s','t')替换为('st')，得到新的词频统计：
+
+{(l,o,w): 5, (l,o,w,e,r): 2, (w,i,d,e,st): 3, (n,e,w,e,st): 6}.
+
+第二轮中，我们发现 (e,st)是频率最高的，然后合并
+ {(l,o,w): 5, (l,o,w,e,r): 2, (w,i,d,est): 3, (n,e,w,est): 6}
+
+ 
