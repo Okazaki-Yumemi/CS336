@@ -167,4 +167,43 @@ We first look at every successive pair of bytes and sum the frequency of the wor
 第二轮中，我们发现 (e,st)是频率最高的，然后合并
  {(l,o,w): 5, (l,o,w,e,r): 2, (w,i,d,est): 3, (n,e,w,est): 6}
 
- 
+## 2.5 Experimenting with BPE tokenizer Training
+
+**parallelizing pre-tokenization**:
+
+speed up pre-tokenization by parallelizing your code with built-in library multiprocessing.
+
+分块. Ensuring your chunk boundaries occur at the begining of a special token.
+
+**Removing special tokens before pre-tokenization**:
+Before running pre-tokenization with the regex pattern, you should strip out all special tokens from your corpus.
+
+This can be done using `re.split` with `"|".join(special_tokens)` as the delimiter
+
+**Optimizing the merging step**:
+
+Naive implementation of BPE is slow because for every merge , it iterates over all byte pairs to identify the most frequent pair.
+
+However, the only pair counts that change after each merge are those that overlap with the merged pair.
+
+BPE training speed can be improved by indexxing the counts of all pairs and incrementally updating these counts,rather than explicitly iterating over each pair of bytes to count pair frequencies.
+
+**Problem (train_bpe):BPE Tokenizer Training**:
+
+**Deliverable**: Write a function that,given a path to an input text file,trains a BPE tokenizer.
+
+**Input**:
+
+input_path: str, Path to a text file with BPE tokenizer training data.
+vocab_size: int A positive integer that defines the maximum final vocabulary size
+special_tokens: list[str] A list of strings to add to the vocabulary. During training, treat them as hard boundaries that prevent merges across their spans
+
+**Output**:
+vocab: dict[int,bytes] Tokenizer vocabulary, a mapping from int (token ID in the vocabulary) to bytes(token bytes)
+
+merges: list[tuple[bytes,bytes]] A list of BPE merges produced from training. Each list item is a tuple of bytes (<token1> , <token2>) , representing that <token1> was merged with <token2>.
+The merges should be ordered by order of creation
+
+To test, first implement the test adapter at adapters.run_train_bpe
+
+Then run `uv run pytest tests/test_train_bpe.py` to run the tests.
