@@ -207,3 +207,72 @@ The merges should be ordered by order of creation
 To test, first implement the test adapter at adapters.run_train_bpe
 
 Then run `uv run pytest tests/test_train_bpe.py` to run the tests.
+
+
+
+
+
+## 2.6 BPE tokenizer: Encoding and Decoding
+
+在之前我们写好了 BPE 的 训练算法，我们可以得到 vocab 词表和 merges列表，现在我们将开始写BPE tokenizer that loads a provided vocabulary and list of merges and uses them to encode and decode text to / from token IDs
+
+### 2.6.1 Encoding text
+
+**Step 1 : Pre-tokenize** 先用UTF-8 来pre-token，和训练过程一样。
+
+**Step 2 : Apply the merges**: 按照merges列表的顺序，依次将pre-tokenized的tokens进行merge，直到没有更多的merges可以应用。
+
+
+**Example**:
+句子 'the cat ate'
+
+vocabulary is {0: b' ', 1: b'a', 2: b'c', 3: b'e', 4: b'h', 5: b't', 6: b'th', 7: b' c', 8: b' a', 9: b'the', 10: b' at'}
+
+learned merges are [(b't', b'h'), (b' ', b'c'), (b' ', b'a'), (b'th', b'e'), (b' a', b't')].
+
+首先pre-tokenizer 会把句子变成
+['the','cat','ate']
+
+第一个pre-token会被变成 [b't', b'h', b'e']
+
+然后我们运用merge列表，把第一个pre-token变成[b'th', b'e']
+然后下一次合并是[b'th',b'e'] 第一个pre-token变成[b'the']
+
+其对应的token ID是9
+
+这样的规则执行下来，cat会变成 [b' c', b'a', b't'],也就是[7, 1, 5]
+
+ate变成[b'at', b'e'],也就是[10, 3]
+
+所以一整个句子变成了
+[9, 7, 1, 5, 10, 3]
+
+###  解码时候的一个细节，无效 UTF-8
+
+单个token不一定能够独立变成一个字符,例如 "牛" 的 UTF-8 字节是
+
+e7 89 9b
+
+要解码应该这么处理
+
+```py
+byte_stream = b"".join(vocab[token_id] for token_id in token_ids)
+
+text = byte_stream.decode("utf-8",errors="replace")
+```
+
+special token单独放进vocab还不够，必须作为一整个整体进入vocab，拿到token ID
+
+
+### Decoding
+
+Decoding简单很多，直接把token id查表拼接输出就好了
+
+
+### 2.6 还有一个重点，流式编码
+
+```py
+encode_iterable(self,iterable:Iterable[str]) -> Iterator[int]:
+```
+
+可以分块读取，但是必须保留边界附近尚未确定完整的文本，不能把任意输入chunk作为天然的tokenizer边界
