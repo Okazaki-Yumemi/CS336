@@ -1,0 +1,6280 @@
+{
+  "files": {
+    "lecture_17.py": "from edtrace import text, image, link\nfrom lecture_util import article_link, post_link\n\ndef main():\n    text(\"## Lecture 17: multimodal models\")\n    text(\"So far: language models\")\n    text(\"> text \u21d2 text\")\n    text(\"The world is multimodal:\")\n    image(\"images/multimodality.png\", width=600)\n\n    text(\"Ultimate goal: **omni model**\")\n    text(\"- Input any combination of modalities (understanding)\")\n    text(\"- Output any combination of modalities (generation)\")\n\n    text(\"Where we are today:\")\n    text(\"- Transformers work really well. So we gotta use them.\")\n    text(\"- Transformers speak tokens (discrete or continuous), where a token represents some ~semantic unit of information.\")\n    text(\"- Therefore, we must convert everything into tokens.\")\n    text(\"- Note: we had to do this with text (recall the tokenization lecture).\")\n    text(\"- For non-text modalities, this is more challenging...\")\n\n    text(\"Questions:\")\n    text(\"1. How do we input non-text data (e.g., understand images)?\")\n    text(\"2. How do we output non-text data (e.g., generate audio)?\")\n\n    # Encoding images\n    clip()\n    siglip()\n\n    # Injecting image encodings into LLMs\n    llava()\n    llava_onevision()\n    qwen_vl()\n    qwen2_vl()\n    qwen3_vl()\n\n    # Towards Omni models\n    chameleon()\n\n    text(\"Summary:\")\n    text(\"- Frontier models are expected to be multimodal (natively multimodal, omni)\")\n    text(\"- Fundamental challenge: how to encode non-text modalities?\")\n    text(\"- Comprehension and generation might demand different things (semantics versus finer-grained details)\")\n    text(\"- Balance images + video (lower information density) and text for training stability\")\n    text(\"- Continuous encoders + Transformer + diffusion models for generation\")\n\n\ndef clip():\n    text(\"CLIP (Contrastive Language-Image Pretraining) \"), link(\"https://arxiv.org/abs/2103.00020\")\n\n    text(\"Context:\")\n    text(\"- Computer vision models were trained on annotated images.\")\n    text(\"- Question: is it possible to leverage the much larger amount of (image, caption) pairs?\")\n    image(\"images/clip.png\", width=800)\n\n    text(\"Method:\")\n    text(\"- Get a batch of (image, text) examples (e.g., 32768)\")\n    text(\"- Encode each image and each text\")\n    text(\"- For each image, prefer its aligned text over other texts\")\n    text(\"- For each text, prefer its aligned image over other images\")\n    image(\"images/clip-code.png\", width=400)\n\n    text(\"Data:\")\n    text(\"- Searched for 500K queries, get ~20K (image, text) pairs per query\")\n    text(\"- Trained on 400M image-text pairs\")\n    text(\"- Didn't release the dataset\")\n    text(\"- Reproduced in OpenCLIP (using LAION-5B dataset, which used CLIP for filtering) \"), link(\"https://arxiv.org/abs/2212.07143\")\n\n    text(\"Data processing \"), link(title=\"code\", url=\"https://github.com/openai/CLIP/blob/main/clip/clip.py#L79\")\n    text(\"- Images come in all resolutions (arbitrary W x H)\")\n    text(\"- Resize using bicubic interpolation so shorter side is 336 pixels\")\n    text(\"- Center crop (cuts off borders to get 336 x 336)\")\n    \n    text(\"Vision encoder:\")\n    text(\"- Experimented with ResNet-50 and Vision Transformers \"), link(\"https://arxiv.org/pdf/2010.11929\")\n    image(\"images/vit.png\", width=600)\n    text(\"- Attention pooling: do QKV with query = global average of activations\")\n    text(\"- Best model: ViT-L/14@336px (L = large, 14x14 patches, 3 channels, trained on 336x336 resolution images)\")\n\n    text(\"Text encoder:\")\n    text(\"- GPT-2 Transformer (63M parameters, 12 layers)\")\n    text(\"- Encode [BOS] ... [EOS], return [EOS] activation at highest layer\")\n\n    text(\"Headline result:\")\n    text(\"- On ImageNet, zero-shot CLIP outperformed ResNet-50 trained on 1.2M ImageNet images\")\n\n    text(\"Ablation:\")\n    text(\"- Alternative: predict text from images directly\")\n    text(\"- Much less compute efficient compared to CLIP-style ranking\")\n    image(\"images/clip-efficiency.png\", width=400)\n\n    text(\"Summary:\")\n    text(\"- Encoding of images captures semantics given by (noisy) text\")\n    text(\"- Design decisions chosen based on image classification (not very fine-grained)\")\n    text(\"- Technical: requires large batch sizes, softmax operation over full batch\")\n\n\ndef siglip():\n    text(\"SigLIP (Sigmoid Loss for Language Image Pre-Training) \"), link(\"https://arxiv.org/abs/2303.15343\")\n\n    text(\"Objective:\")\n    text(\"- CLIP: multiclass classification for (text, image) versus (text, image') for all image'\")\n    text(\"- SigLIP: binary classification for (text, image) - aligned or not?\")\n    image(\"images/siglip-code.png\", width=500)\n\n    text(\"Data:\")\n    text(\"- WebLI dataset: O(billion) (image, text) pairs \"), link(\"https://arxiv.org/pdf/2209.06794\")\n    text(\"- Scraped from the Internet\")\n    text(\"- Used automatic OCR to extract text from images\")\n    text(\"- Keep 10% highest quality\")\n    text(\"- Supports 100 languages\")\n\n    text(\"Efficiency:\")\n    text(\"- CLIP: 10 days on 256 TPUv3\")\n    text(\"- SigLIP: 5 days on 32 TPUv4 (lower FLOP/s than TPUv3) - much faster!\")\n    image(\"images/siglip-parallelism.png\", width=800)\n\n    text(\"Batch size:\")\n    text(\"- Decouple batch size from loss\")\n    text(\"- Better than CLIP for <16K batch sizes\")\n    text(\"- Go up to 1M batch size, but 32K is enough\")\n\n\ndef llava():\n    text(\"LLaVA (Large Language and Vision Assistant) \"), link(\"https://arxiv.org/abs/2304.08485\")\n\n    text(\"Vision encoder: CLIP\")\n    text(\"Text decoder: Vicuna (LLaMA fine-tuned on ShareGPT conversations) \"), post_link(\"https://www.lmsys.org/blog/2023-03-30-vicuna/\")\n\n    text(\"Data:\")\n    text(\"- MS COCO has images annotated with bounding boxes and Mechanical Turk captions\")\n    text(\"- Prompt GPT-4 with captions or detected objects and generate questions or conversations\")\n    text(\"- Pair generations with original images\")\n    text(\"- 158K examples\")\n    image(\"images/llava-gen.png\", width=600)\n\n    text(\"Model:\")\n    text(\"- Encode images with CLIP (ViT-L/14)\")\n    text(\"- Linear projection (W) into embedding space (Flamingo and Q-former are more complex)\")\n    image(\"images/llava-architecture.png\", width=600)\n\n    text(\"Training:\")\n    text(\"- Stage 1 (alignment): freeze vision encoder and language model, only train W\")\n    text(\"- Stage 2 (fine-tuning): freeze vision encoder and train W and language model\")\n    image(\"images/llava-example.png\", width=600)\n\n\ndef llava_onevision():\n    text(\"LLaVA OneVision \"), link(\"https://arxiv.org/pdf/2408.03326\")\n    text(\"- Latest version in the LLaVA series (after LLaVA 1.5, LLaVA-Next)\")\n    text(\"- Handle multiple images, video\")\n\n    image(\"images/llava-onevision.png\", width=600)\n    text(\"- Vision encoder: SigLIP (use grid features before and after last Transformer layer)\")\n    text(\"- Text decoder: Qwen-2 72B\")\n    text(\"- Projector: 2-layer MLP\")\n\n    text(\"Data processing:\")\n    text(\"- Preserving high resolution is important (e.g., for OCR)\")\n    text(\"- CLIP resizes and crops to 336x336, which loses information\")\n    text(\"- Solution: AnyRes, introduced in LLaVA 1.5 \"), link(title=\"paper\", url=\"https://static.hliu.cc/files/llava/improved_llava.pdf\")\n    text(\"- Break up image into a x b pieces (matching resolution of vision encoder), encode, concatenate\")\n    text(\"- If too many tokens (original image is too high resolution), then use bilinear interpolation\")\n    image(\"images/llava-onevision-anyres.png\", width=600)\n    text(\"Handle 3 types of input (single image, multiple images, video):\")\n    text(\"- Goal: make all of the modalities produce roughly the same length\")\n    image(\"images/llava-onevision-modalities.png\", width=600)\n    text(\"- Single image: use higher resolution\")\n    text(\"- Multiple images: use base resolution for each image\")\n    text(\"- Video: use lower resolution for each frame\")\n\n    text(\"Data:\")\n    text(\"- Philosophy: quality over quantity\")\n    image(\"images/llava-onevision-data-1.png\", width=700)\n    image(\"images/llava-onevision-data-2.png\", width=700)\n\n    text(\"Training:\")\n    text(\"- Philosophy: easier to harder\")\n    image(\"images/llava-onevision-training.png\", width=700)\n\n    text(\"Transfer between modalities:\")\n    text(\"- Single image data for diagrams and charts, but generalize to multi-image\")\n    image(\"images/llava-onevision-transfer-s1.png\", width=600)\n    text(\"- OCR on single image data, relational reasoning from multi-image data, generalize to GUI-based agents\")\n    image(\"images/llava-onevision-transfer-s2.png\", width=600)\n    text(\"- Visual prompting (circle) in single images, generalize to videos\")\n    image(\"images/llava-onevision-transfer-s8.png\", width=600)\n\n    text(\"Summary:\")\n    text(\"- Standard VLM template: vision encoder + projector + LM\")\n    text(\"- Most work goes into data curation (heavy on synthesized, task-specific data)\")\n    text(\"- Open-source (released model weights and data)\")\n\n\ndef qwen_vl():\n    text(\"Qwen-VL \"), link(\"https://arxiv.org/abs/2308.12966\")\n\n    text(\"Architecture:\")\n    text(\"- Vision encoder: OpenCLIP's ViT-bigC (14x14 patches) \"), link(\"https://arxiv.org/abs/2212.07143\")\n    text(\"- Adaptor: one layer cross-attention, incorporate 2D positional encodings, maps to fixed length of 256\")\n    text(\"- Special tokens: <img>, <box>, <ref>\")\n\n    text(\"Training:\")\n    image(\"images/qwen-vl-stages.png\", width=700)\n    text(\"- Stage 1: large-scale low quality data; freeze LM, train vision encoder + adaptor\")\n    image(\"images/qwen-vl-stage1.png\", width=400)\n    text(\"- Stage 2: higher quality task-specific data, increase resolution; train all parameters\")\n    image(\"images/qwen-vl-stage2.png\", width=400)\n    text(\"- Stage 3: instruction tuning data; freeze visual encoder, train adaptor + LM\")\n\n    image(\"images/qwen-vl-examples.png\", width=600)\n\n\ndef qwen2_vl():\n    text(\"Qwen2-VL \"), link(\"https://arxiv.org/abs/2409.12191\")\n\n    text(\"Visual encoder: larger ViT (675M)\")\n    image(\"images/qwen2-vl-architecture.png\", width=700)\n    text(\"- Key: dynamic resolution to handle varying resolutions\")\n    text(\"- Each 224 x 224 patch encoded with ViT/14, compress every 2x2 => 66 tokens\")\n    text(\"- Video: sample 2 frames/sec, max 16384 tokens\")\n\n    text(\"Multimodal Rotary Position Embedding (MRoPE):\")\n    image(\"images/qwen2-vl-mrope.png\", width=600)\n    \n    text(\"Initialize LM with Qwen2 and vision encoder from DFN \"), link(\"https://arxiv.org/abs/2309.17425\")\n    text(\"Training (similar to Qwen-VL):\")\n    text(\"- Stage 1: train only visual encoder\")\n    text(\"- Stage 2: train all parameters\")\n    text(\"- Stage 3: train language model on instruction following datasets\")\n\n    text(\"Many capabilities:\")\n    image(\"images/qwen2-vl-capabilities.png\", width=700)\n\n\ndef qwen3_vl():\n    text(\"Qwen3-VL \"), link(\"https://arxiv.org/abs/2511.21631\")\n    image(\"images/qwen3-vl.png\", width=700)\n\n    text(\"Language model:\")\n    text(\"- Qwen-3 models (dense and MoE models up to 235B-A22B)\")\n    text(\"- Long context understanding (256K)\")\n\n    text(\"Vision encoder:\")\n    text(\"- SigLIP-2 (same architecture as SigLIP) \"), link(\"https://arxiv.org/pdf/2502.14786\")\n    text(\"- Interleaved MRoPE: distribute all axes (temporal, width, height) to low- and high-frequency bands\")\n    text(\"... [t w h t w h t w h t w h] rather than [t t t t w w w w h h h h]\")\n    text(\"- Add explicit video timestamps (as separate tokens rather in positional embeddings)\")\n    text(\"- Square-root-normalized per-token loss: balance text and multimodal data (video examples are long, don't want to dominate)\")\n\n    text(\"Adapter:\")\n    text(\"- DeepStack: cross-layer fusion to inject visual information into multiple layers \"), link(\"https://arxiv.org/abs/2406.04334\")\n\n    text(\"Training:\")\n    text(\"- Pre-training has 4 stages (train adapter, train all parameters on 8K, 32K, 256K lengths)\")\n    image(\"images/qwen3-vl-pretraining.png\", width=600)\n    text(\"- Post-training: SFT on long CoT data, knowledge distillation, RL\")\n\n    image(\"images/qwen3-vl-results.png\", width=600)\n\n    text(\"Summary:\")\n    text(\"- SOTA performance\")\n    text(\"- Lots of data work, but not many details\")\n    text(\"- Minor but potentially important architectural improvements\")\n    text(\"- Scale up\")\n\n\ndef chameleon():\n    text(\"Chameleon \"), link(\"https://arxiv.org/pdf/2405.09818\")\n\n    text(\"So far: VLMs encode images (via CLIP or SigLIP), inject into LM\")\n    text(\"Disadvantage: can't generate images (need diffusion)\")\n\n    text(\"Chameleon: map everything into discrete tokens\")\n    text(\"Advantage: can analyze and generate images in a uniform way\")\n    image(\"images/chameleon.png\", width=600)\n    image(\"images/chameleon-example.png\", width=600)\n\n    text(\"Vision encoder \"), link(\"https://arxiv.org/pdf/2203.13131\")\n    text(\"- Key difference: encoder needs to map to discrete tokens (so we can generate them)\")\n    text(\"- VQ-VAE (Vector Quantized Variational Autoencoder) \"), link(\"https://arxiv.org/pdf/1711.00937\")\n    text(\"- Idea: map image to a discrete codebook, decode back to image and minimize reconstruction loss\")\n    image(\"images/vq-vae.png\", width=600)\n    text(\"- Encodes 512 x 512 image into 1024 tokens (codebook of size 8192)\")\n    text(\"- Train a new BPE tokenizer\")\n\n    text(\"Training:\")\n    text(\"- Stage 1 (80%): large-scale, unsupervised (2.9T text tokens, 1.5T text/image tokens, 400B text/image interleaved tokens)\")\n    text(\"- Stage 2 (20%): 50% of stage 1 data, 50% of high quality data\")\n    \n    text(\"Training stability\")\n    text(\"- Text tokens have low entropy, image tokens have high entropy, leads to norm growth, logit drift problem\")\n    text(\"- Fixes: QK norm, z-loss regularization\")\n\n    text(\"Summary:\")\n    text(\"- Elegant (just autoregressive modeling of discrete tokens)\")\n    text(\"- Not as performant (discretization loses information - think OCR)\")\n    text(\"- Training with multiple modalities is tricky\")\n    \n\nif __name__ == \"__main__\":\n    main()\n"
+  },
+  "hidden_line_numbers": {
+    "lecture_17.py": []
+  },
+  "steps": [
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 4,
+          "function_name": "main",
+          "code": "def main():"
+        }
+      ],
+      "env": {},
+      "renderings": []
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 5,
+          "function_name": "main",
+          "code": "text(\"## Lecture 17: multimodal models\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "## Lecture 17: multimodal models",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 6,
+          "function_name": "main",
+          "code": "text(\"So far: language models\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "So far: language models",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 7,
+          "function_name": "main",
+          "code": "text(\"> text \u21d2 text\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "> text \u21d2 text",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 8,
+          "function_name": "main",
+          "code": "text(\"The world is multimodal:\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "The world is multimodal:",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 9,
+          "function_name": "main",
+          "code": "image(\"images/multimodality.png\", width=600)"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "image",
+          "data": "images/multimodality.png",
+          "style": {
+            "width": 600
+          },
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 11,
+          "function_name": "main",
+          "code": "text(\"Ultimate goal: **omni model**\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Ultimate goal: **omni model**",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 12,
+          "function_name": "main",
+          "code": "text(\"- Input any combination of modalities (understanding)\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Input any combination of modalities (understanding)",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 13,
+          "function_name": "main",
+          "code": "text(\"- Output any combination of modalities (generation)\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Output any combination of modalities (generation)",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 15,
+          "function_name": "main",
+          "code": "text(\"Where we are today:\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Where we are today:",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 16,
+          "function_name": "main",
+          "code": "text(\"- Transformers work really well. So we gotta use them.\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Transformers work really well. So we gotta use them.",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 17,
+          "function_name": "main",
+          "code": "text(\"- Transformers speak tokens (discrete or continuous), where a token represents some ~semantic unit of information.\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Transformers speak tokens (discrete or continuous), where a token represents some ~semantic unit of information.",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 18,
+          "function_name": "main",
+          "code": "text(\"- Therefore, we must convert everything into tokens.\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Therefore, we must convert everything into tokens.",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 19,
+          "function_name": "main",
+          "code": "text(\"- Note: we had to do this with text (recall the tokenization lecture).\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Note: we had to do this with text (recall the tokenization lecture).",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 20,
+          "function_name": "main",
+          "code": "text(\"- For non-text modalities, this is more challenging...\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- For non-text modalities, this is more challenging...",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 22,
+          "function_name": "main",
+          "code": "text(\"Questions:\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Questions:",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 23,
+          "function_name": "main",
+          "code": "text(\"1. How do we input non-text data (e.g., understand images)?\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "1. How do we input non-text data (e.g., understand images)?",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 24,
+          "function_name": "main",
+          "code": "text(\"2. How do we output non-text data (e.g., generate audio)?\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "2. How do we output non-text data (e.g., generate audio)?",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 27,
+          "function_name": "main",
+          "code": "clip()"
+        }
+      ],
+      "env": {},
+      "renderings": []
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 27,
+          "function_name": "main",
+          "code": "clip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 48,
+          "function_name": "clip",
+          "code": "def clip():"
+        }
+      ],
+      "env": {},
+      "renderings": []
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 27,
+          "function_name": "main",
+          "code": "clip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 49,
+          "function_name": "clip",
+          "code": "text(\"CLIP (Contrastive Language-Image Pretraining) \"), link(\"https://arxiv.org/abs/2103.00020\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "CLIP (Contrastive Language-Image Pretraining) ",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        },
+        {
+          "type": "link",
+          "data": "[Radford+ 2021]",
+          "style": {},
+          "external_link": {
+            "title": "Learning Transferable Visual Models From Natural Language Supervision",
+            "authors": [
+              "Alec Radford",
+              "Jong Wook Kim",
+              "Chris Hallacy",
+              "Aditya Ramesh",
+              "Gabriel Goh",
+              "Sandhini Agarwal",
+              "Girish Sastry",
+              "Amanda Askell",
+              "Pamela Mishkin",
+              "Jack Clark",
+              "Gretchen Krueger",
+              "Ilya Sutskever"
+            ],
+            "organization": null,
+            "date": "2021-02-26",
+            "url": "https://arxiv.org/abs/2103.00020",
+            "description": "State-of-the-art computer vision systems are trained to predict a fixed set of predetermined object categories. This restricted form of supervision limits their generality and usability since additional labeled data is needed to specify any other visual concept. Learning directly from raw text about images is a promising alternative which leverages a much broader source of supervision. We demonstrate that the simple pre-training task of predicting which caption goes with which image is an efficient and scalable way to learn SOTA image representations from scratch on a dataset of 400 million (image, text) pairs collected from the internet. After pre-training, natural language is used to reference learned visual concepts (or describe new ones) enabling zero-shot transfer of the model to downstream tasks. We study the performance of this approach by benchmarking on over 30 different existing computer vision datasets, spanning tasks such as OCR, action recognition in videos, geo-localization, and many types of fine-grained object classification. The model transfers non-trivially to most tasks and is often competitive with a fully supervised baseline without the need for any dataset specific training. For instance, we match the accuracy of the original ResNet-50 on ImageNet zero-shot without needing to use any of the 1.28 million training examples it was trained on. We release our code and pre-trained model weights at https://github.com/OpenAI/CLIP.",
+            "notes": null
+          },
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 27,
+          "function_name": "main",
+          "code": "clip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 51,
+          "function_name": "clip",
+          "code": "text(\"Context:\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Context:",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 27,
+          "function_name": "main",
+          "code": "clip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 52,
+          "function_name": "clip",
+          "code": "text(\"- Computer vision models were trained on annotated images.\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Computer vision models were trained on annotated images.",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 27,
+          "function_name": "main",
+          "code": "clip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 53,
+          "function_name": "clip",
+          "code": "text(\"- Question: is it possible to leverage the much larger amount of (image, caption) pairs?\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Question: is it possible to leverage the much larger amount of (image, caption) pairs?",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 27,
+          "function_name": "main",
+          "code": "clip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 54,
+          "function_name": "clip",
+          "code": "image(\"images/clip.png\", width=800)"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "image",
+          "data": "images/clip.png",
+          "style": {
+            "width": 800
+          },
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 27,
+          "function_name": "main",
+          "code": "clip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 56,
+          "function_name": "clip",
+          "code": "text(\"Method:\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Method:",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 27,
+          "function_name": "main",
+          "code": "clip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 57,
+          "function_name": "clip",
+          "code": "text(\"- Get a batch of (image, text) examples (e.g., 32768)\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Get a batch of (image, text) examples (e.g., 32768)",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 27,
+          "function_name": "main",
+          "code": "clip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 58,
+          "function_name": "clip",
+          "code": "text(\"- Encode each image and each text\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Encode each image and each text",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 27,
+          "function_name": "main",
+          "code": "clip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 59,
+          "function_name": "clip",
+          "code": "text(\"- For each image, prefer its aligned text over other texts\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- For each image, prefer its aligned text over other texts",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 27,
+          "function_name": "main",
+          "code": "clip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 60,
+          "function_name": "clip",
+          "code": "text(\"- For each text, prefer its aligned image over other images\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- For each text, prefer its aligned image over other images",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 27,
+          "function_name": "main",
+          "code": "clip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 61,
+          "function_name": "clip",
+          "code": "image(\"images/clip-code.png\", width=400)"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "image",
+          "data": "images/clip-code.png",
+          "style": {
+            "width": 400
+          },
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 27,
+          "function_name": "main",
+          "code": "clip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 63,
+          "function_name": "clip",
+          "code": "text(\"Data:\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Data:",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 27,
+          "function_name": "main",
+          "code": "clip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 64,
+          "function_name": "clip",
+          "code": "text(\"- Searched for 500K queries, get ~20K (image, text) pairs per query\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Searched for 500K queries, get ~20K (image, text) pairs per query",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 27,
+          "function_name": "main",
+          "code": "clip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 65,
+          "function_name": "clip",
+          "code": "text(\"- Trained on 400M image-text pairs\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Trained on 400M image-text pairs",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 27,
+          "function_name": "main",
+          "code": "clip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 66,
+          "function_name": "clip",
+          "code": "text(\"- Didn't release the dataset\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Didn't release the dataset",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 27,
+          "function_name": "main",
+          "code": "clip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 67,
+          "function_name": "clip",
+          "code": "text(\"- Reproduced in OpenCLIP (using LAION-5B dataset, which used CLIP for filtering) \"), link(\"https://arxiv.org/abs/2212.07143\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Reproduced in OpenCLIP (using LAION-5B dataset, which used CLIP for filtering) ",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        },
+        {
+          "type": "link",
+          "data": "[Cherti+ 2022]",
+          "style": {},
+          "external_link": {
+            "title": "Reproducible scaling laws for contrastive language-image learning",
+            "authors": [
+              "Mehdi Cherti",
+              "Romain Beaumont",
+              "Ross Wightman",
+              "Mitchell Wortsman",
+              "Gabriel Ilharco",
+              "Cade Gordon",
+              "Christoph Schuhmann",
+              "Ludwig Schmidt",
+              "Jenia Jitsev"
+            ],
+            "organization": null,
+            "date": "2022-12-14",
+            "url": "https://arxiv.org/abs/2212.07143",
+            "description": "Scaling up neural networks has led to remarkable performance across a wide range of tasks. Moreover, performance often follows reliable scaling laws as a function of training set size, model size, and compute, which offers valuable guidance as large-scale experiments are becoming increasingly expensive. However, previous work on scaling laws has primarily used private data \\& models or focused on uni-modal language or vision learning. To address these limitations, we investigate scaling laws for contrastive language-image pre-training (CLIP) with the public LAION dataset and the open-source OpenCLIP repository. Our large-scale experiments involve models trained on up to two billion image-text pairs and identify power law scaling for multiple downstream tasks including zero-shot classification, retrieval, linear probing, and end-to-end fine-tuning. We find that the training distribution plays a key role in scaling laws as the OpenAI and OpenCLIP models exhibit different scaling behavior despite identical model architectures and similar training recipes. We open-source our evaluation workflow and all models, including the largest public CLIP models, to ensure reproducibility and make scaling laws research more accessible. Source code and instructions to reproduce this study will be available at https://github.com/LAION-AI/scaling-laws-openclip",
+            "notes": null
+          },
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 27,
+          "function_name": "main",
+          "code": "clip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 69,
+          "function_name": "clip",
+          "code": "text(\"Data processing \"), link(title=\"code\", url=\"https://github.com/openai/CLIP/blob/main/clip/clip.py#L79\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Data processing ",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        },
+        {
+          "type": "link",
+          "data": "[code]",
+          "style": {},
+          "external_link": {
+            "title": "code",
+            "authors": null,
+            "organization": null,
+            "date": null,
+            "url": "https://github.com/openai/CLIP/blob/main/clip/clip.py#L79",
+            "description": null,
+            "notes": null
+          },
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 27,
+          "function_name": "main",
+          "code": "clip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 70,
+          "function_name": "clip",
+          "code": "text(\"- Images come in all resolutions (arbitrary W x H)\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Images come in all resolutions (arbitrary W x H)",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 27,
+          "function_name": "main",
+          "code": "clip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 71,
+          "function_name": "clip",
+          "code": "text(\"- Resize using bicubic interpolation so shorter side is 336 pixels\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Resize using bicubic interpolation so shorter side is 336 pixels",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 27,
+          "function_name": "main",
+          "code": "clip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 72,
+          "function_name": "clip",
+          "code": "text(\"- Center crop (cuts off borders to get 336 x 336)\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Center crop (cuts off borders to get 336 x 336)",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 27,
+          "function_name": "main",
+          "code": "clip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 74,
+          "function_name": "clip",
+          "code": "text(\"Vision encoder:\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Vision encoder:",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 27,
+          "function_name": "main",
+          "code": "clip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 75,
+          "function_name": "clip",
+          "code": "text(\"- Experimented with ResNet-50 and Vision Transformers \"), link(\"https://arxiv.org/pdf/2010.11929\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Experimented with ResNet-50 and Vision Transformers ",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        },
+        {
+          "type": "link",
+          "data": "[Dosovitskiy+ 2020]",
+          "style": {},
+          "external_link": {
+            "title": "An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale",
+            "authors": [
+              "Alexey Dosovitskiy",
+              "Lucas Beyer",
+              "Alexander Kolesnikov",
+              "Dirk Weissenborn",
+              "Xiaohua Zhai",
+              "Thomas Unterthiner",
+              "Mostafa Dehghani",
+              "Matthias Minderer",
+              "Georg Heigold",
+              "Sylvain Gelly",
+              "Jakob Uszkoreit",
+              "Neil Houlsby"
+            ],
+            "organization": null,
+            "date": "2020-10-22",
+            "url": "https://arxiv.org/pdf/2010.11929",
+            "description": "While the Transformer architecture has become the de-facto standard for natural language processing tasks, its applications to computer vision remain limited. In vision, attention is either applied in conjunction with convolutional networks, or used to replace certain components of convolutional networks while keeping their overall structure in place. We show that this reliance on CNNs is not necessary and a pure transformer applied directly to sequences of image patches can perform very well on image classification tasks. When pre-trained on large amounts of data and transferred to multiple mid-sized or small image recognition benchmarks (ImageNet, CIFAR-100, VTAB, etc.), Vision Transformer (ViT) attains excellent results compared to state-of-the-art convolutional networks while requiring substantially fewer computational resources to train.",
+            "notes": null
+          },
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 27,
+          "function_name": "main",
+          "code": "clip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 76,
+          "function_name": "clip",
+          "code": "image(\"images/vit.png\", width=600)"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "image",
+          "data": "images/vit.png",
+          "style": {
+            "width": 600
+          },
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 27,
+          "function_name": "main",
+          "code": "clip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 77,
+          "function_name": "clip",
+          "code": "text(\"- Attention pooling: do QKV with query = global average of activations\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Attention pooling: do QKV with query = global average of activations",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 27,
+          "function_name": "main",
+          "code": "clip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 78,
+          "function_name": "clip",
+          "code": "text(\"- Best model: ViT-L/14@336px (L = large, 14x14 patches, 3 channels, trained on 336x336 resolution images)\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Best model: ViT-L/14@336px (L = large, 14x14 patches, 3 channels, trained on 336x336 resolution images)",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 27,
+          "function_name": "main",
+          "code": "clip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 80,
+          "function_name": "clip",
+          "code": "text(\"Text encoder:\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Text encoder:",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 27,
+          "function_name": "main",
+          "code": "clip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 81,
+          "function_name": "clip",
+          "code": "text(\"- GPT-2 Transformer (63M parameters, 12 layers)\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- GPT-2 Transformer (63M parameters, 12 layers)",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 27,
+          "function_name": "main",
+          "code": "clip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 82,
+          "function_name": "clip",
+          "code": "text(\"- Encode [BOS] ... [EOS], return [EOS] activation at highest layer\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Encode [BOS] ... [EOS], return [EOS] activation at highest layer",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 27,
+          "function_name": "main",
+          "code": "clip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 84,
+          "function_name": "clip",
+          "code": "text(\"Headline result:\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Headline result:",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 27,
+          "function_name": "main",
+          "code": "clip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 85,
+          "function_name": "clip",
+          "code": "text(\"- On ImageNet, zero-shot CLIP outperformed ResNet-50 trained on 1.2M ImageNet images\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- On ImageNet, zero-shot CLIP outperformed ResNet-50 trained on 1.2M ImageNet images",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 27,
+          "function_name": "main",
+          "code": "clip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 87,
+          "function_name": "clip",
+          "code": "text(\"Ablation:\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Ablation:",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 27,
+          "function_name": "main",
+          "code": "clip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 88,
+          "function_name": "clip",
+          "code": "text(\"- Alternative: predict text from images directly\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Alternative: predict text from images directly",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 27,
+          "function_name": "main",
+          "code": "clip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 89,
+          "function_name": "clip",
+          "code": "text(\"- Much less compute efficient compared to CLIP-style ranking\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Much less compute efficient compared to CLIP-style ranking",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 27,
+          "function_name": "main",
+          "code": "clip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 90,
+          "function_name": "clip",
+          "code": "image(\"images/clip-efficiency.png\", width=400)"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "image",
+          "data": "images/clip-efficiency.png",
+          "style": {
+            "width": 400
+          },
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 27,
+          "function_name": "main",
+          "code": "clip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 92,
+          "function_name": "clip",
+          "code": "text(\"Summary:\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Summary:",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 27,
+          "function_name": "main",
+          "code": "clip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 93,
+          "function_name": "clip",
+          "code": "text(\"- Encoding of images captures semantics given by (noisy) text\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Encoding of images captures semantics given by (noisy) text",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 27,
+          "function_name": "main",
+          "code": "clip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 94,
+          "function_name": "clip",
+          "code": "text(\"- Design decisions chosen based on image classification (not very fine-grained)\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Design decisions chosen based on image classification (not very fine-grained)",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 27,
+          "function_name": "main",
+          "code": "clip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 95,
+          "function_name": "clip",
+          "code": "text(\"- Technical: requires large batch sizes, softmax operation over full batch\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Technical: requires large batch sizes, softmax operation over full batch",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 27,
+          "function_name": "main",
+          "code": "clip()"
+        }
+      ],
+      "env": {},
+      "renderings": []
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 28,
+          "function_name": "main",
+          "code": "siglip()"
+        }
+      ],
+      "env": {},
+      "renderings": []
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 28,
+          "function_name": "main",
+          "code": "siglip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 98,
+          "function_name": "siglip",
+          "code": "def siglip():"
+        }
+      ],
+      "env": {},
+      "renderings": []
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 28,
+          "function_name": "main",
+          "code": "siglip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 99,
+          "function_name": "siglip",
+          "code": "text(\"SigLIP (Sigmoid Loss for Language Image Pre-Training) \"), link(\"https://arxiv.org/abs/2303.15343\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "SigLIP (Sigmoid Loss for Language Image Pre-Training) ",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        },
+        {
+          "type": "link",
+          "data": "[Zhai+ 2023]",
+          "style": {},
+          "external_link": {
+            "title": "Sigmoid Loss for Language Image Pre-Training",
+            "authors": [
+              "Xiaohua Zhai",
+              "Basil Mustafa",
+              "Alexander Kolesnikov",
+              "Lucas Beyer"
+            ],
+            "organization": null,
+            "date": "2023-03-27",
+            "url": "https://arxiv.org/abs/2303.15343",
+            "description": "We propose a simple pairwise Sigmoid loss for Language-Image Pre-training (SigLIP). Unlike standard contrastive learning with softmax normalization, the sigmoid loss operates solely on image-text pairs and does not require a global view of the pairwise similarities for normalization. The sigmoid loss simultaneously allows further scaling up the batch size, while also performing better at smaller batch sizes. Combined with Locked-image Tuning, with only four TPUv4 chips, we train a SigLiT model that achieves 84.5% ImageNet zero-shot accuracy in two days. The disentanglement of the batch size from the loss further allows us to study the impact of examples vs pairs and negative to positive ratio. Finally, we push the batch size to the extreme, up to one million, and find that the benefits of growing batch size quickly diminish, with a more reasonable batch size of 32k being sufficient. We release our models at https://github.com/google-research/big_vision and hope our research motivates further explorations in improving the quality and efficiency of language-image pre-training.",
+            "notes": null
+          },
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 28,
+          "function_name": "main",
+          "code": "siglip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 101,
+          "function_name": "siglip",
+          "code": "text(\"Objective:\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Objective:",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 28,
+          "function_name": "main",
+          "code": "siglip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 102,
+          "function_name": "siglip",
+          "code": "text(\"- CLIP: multiclass classification for (text, image) versus (text, image') for all image'\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- CLIP: multiclass classification for (text, image) versus (text, image') for all image'",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 28,
+          "function_name": "main",
+          "code": "siglip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 103,
+          "function_name": "siglip",
+          "code": "text(\"- SigLIP: binary classification for (text, image) - aligned or not?\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- SigLIP: binary classification for (text, image) - aligned or not?",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 28,
+          "function_name": "main",
+          "code": "siglip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 104,
+          "function_name": "siglip",
+          "code": "image(\"images/siglip-code.png\", width=500)"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "image",
+          "data": "images/siglip-code.png",
+          "style": {
+            "width": 500
+          },
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 28,
+          "function_name": "main",
+          "code": "siglip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 106,
+          "function_name": "siglip",
+          "code": "text(\"Data:\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Data:",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 28,
+          "function_name": "main",
+          "code": "siglip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 107,
+          "function_name": "siglip",
+          "code": "text(\"- WebLI dataset: O(billion) (image, text) pairs \"), link(\"https://arxiv.org/pdf/2209.06794\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- WebLI dataset: O(billion) (image, text) pairs ",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        },
+        {
+          "type": "link",
+          "data": "[Chen+ 2022]",
+          "style": {},
+          "external_link": {
+            "title": "PaLI: A Jointly-Scaled Multilingual Language-Image Model",
+            "authors": [
+              "Xi Chen",
+              "Xiao Wang",
+              "Soravit Changpinyo",
+              "AJ Piergiovanni",
+              "Piotr Padlewski",
+              "Daniel Salz",
+              "Sebastian Goodman",
+              "Adam Grycner",
+              "Basil Mustafa",
+              "Lucas Beyer",
+              "Alexander Kolesnikov",
+              "Joan Puigcerver",
+              "Nan Ding",
+              "Keran Rong",
+              "Hassan Akbari",
+              "Gaurav Mishra",
+              "Linting Xue",
+              "Ashish Thapliyal",
+              "James Bradbury",
+              "Weicheng Kuo",
+              "Mojtaba Seyedhosseini",
+              "Chao Jia",
+              "Burcu Karagol Ayan",
+              "Carlos Riquelme",
+              "Andreas Steiner",
+              "Anelia Angelova",
+              "Xiaohua Zhai",
+              "Neil Houlsby",
+              "Radu Soricut"
+            ],
+            "organization": null,
+            "date": "2022-09-14",
+            "url": "https://arxiv.org/pdf/2209.06794",
+            "description": "Effective scaling and a flexible task interface enable large language models to excel at many tasks. We present PaLI (Pathways Language and Image model), a model that extends this approach to the joint modeling of language and vision. PaLI generates text based on visual and textual inputs, and with this interface performs many vision, language, and multimodal tasks, in many languages. To train PaLI, we make use of large pre-trained encoder-decoder language models and Vision Transformers (ViTs). This allows us to capitalize on their existing capabilities and leverage the substantial cost of training them. We find that joint scaling of the vision and language components is important. Since existing Transformers for language are much larger than their vision counterparts, we train a large, 4-billion parameter ViT (ViT-e) to quantify the benefits from even larger-capacity vision models. To train PaLI, we create a large multilingual mix of pretraining tasks, based on a new image-text training set containing 10B images and texts in over 100 languages. PaLI achieves state-of-the-art in multiple vision and language tasks (such as captioning, visual question-answering, scene-text understanding), while retaining a simple, modular, and scalable design.",
+            "notes": null
+          },
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 28,
+          "function_name": "main",
+          "code": "siglip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 108,
+          "function_name": "siglip",
+          "code": "text(\"- Scraped from the Internet\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Scraped from the Internet",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 28,
+          "function_name": "main",
+          "code": "siglip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 109,
+          "function_name": "siglip",
+          "code": "text(\"- Used automatic OCR to extract text from images\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Used automatic OCR to extract text from images",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 28,
+          "function_name": "main",
+          "code": "siglip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 110,
+          "function_name": "siglip",
+          "code": "text(\"- Keep 10% highest quality\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Keep 10% highest quality",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 28,
+          "function_name": "main",
+          "code": "siglip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 111,
+          "function_name": "siglip",
+          "code": "text(\"- Supports 100 languages\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Supports 100 languages",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 28,
+          "function_name": "main",
+          "code": "siglip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 113,
+          "function_name": "siglip",
+          "code": "text(\"Efficiency:\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Efficiency:",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 28,
+          "function_name": "main",
+          "code": "siglip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 114,
+          "function_name": "siglip",
+          "code": "text(\"- CLIP: 10 days on 256 TPUv3\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- CLIP: 10 days on 256 TPUv3",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 28,
+          "function_name": "main",
+          "code": "siglip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 115,
+          "function_name": "siglip",
+          "code": "text(\"- SigLIP: 5 days on 32 TPUv4 (lower FLOP/s than TPUv3) - much faster!\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- SigLIP: 5 days on 32 TPUv4 (lower FLOP/s than TPUv3) - much faster!",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 28,
+          "function_name": "main",
+          "code": "siglip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 116,
+          "function_name": "siglip",
+          "code": "image(\"images/siglip-parallelism.png\", width=800)"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "image",
+          "data": "images/siglip-parallelism.png",
+          "style": {
+            "width": 800
+          },
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 28,
+          "function_name": "main",
+          "code": "siglip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 118,
+          "function_name": "siglip",
+          "code": "text(\"Batch size:\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Batch size:",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 28,
+          "function_name": "main",
+          "code": "siglip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 119,
+          "function_name": "siglip",
+          "code": "text(\"- Decouple batch size from loss\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Decouple batch size from loss",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 28,
+          "function_name": "main",
+          "code": "siglip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 120,
+          "function_name": "siglip",
+          "code": "text(\"- Better than CLIP for <16K batch sizes\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Better than CLIP for <16K batch sizes",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 28,
+          "function_name": "main",
+          "code": "siglip()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 121,
+          "function_name": "siglip",
+          "code": "text(\"- Go up to 1M batch size, but 32K is enough\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Go up to 1M batch size, but 32K is enough",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 28,
+          "function_name": "main",
+          "code": "siglip()"
+        }
+      ],
+      "env": {},
+      "renderings": []
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 31,
+          "function_name": "main",
+          "code": "llava()"
+        }
+      ],
+      "env": {},
+      "renderings": []
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 31,
+          "function_name": "main",
+          "code": "llava()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 124,
+          "function_name": "llava",
+          "code": "def llava():"
+        }
+      ],
+      "env": {},
+      "renderings": []
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 31,
+          "function_name": "main",
+          "code": "llava()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 125,
+          "function_name": "llava",
+          "code": "text(\"LLaVA (Large Language and Vision Assistant) \"), link(\"https://arxiv.org/abs/2304.08485\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "LLaVA (Large Language and Vision Assistant) ",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        },
+        {
+          "type": "link",
+          "data": "[Liu+ 2023]",
+          "style": {},
+          "external_link": {
+            "title": "Visual Instruction Tuning",
+            "authors": [
+              "Haotian Liu",
+              "Chunyuan Li",
+              "Qingyang Wu",
+              "Yong Jae Lee"
+            ],
+            "organization": null,
+            "date": "2023-04-17",
+            "url": "https://arxiv.org/abs/2304.08485",
+            "description": "Instruction tuning large language models (LLMs) using machine-generated instruction-following data has improved zero-shot capabilities on new tasks, but the idea is less explored in the multimodal field. In this paper, we present the first attempt to use language-only GPT-4 to generate multimodal language-image instruction-following data. By instruction tuning on such generated data, we introduce LLaVA: Large Language and Vision Assistant, an end-to-end trained large multimodal model that connects a vision encoder and LLM for general-purpose visual and language understanding.Our early experiments show that LLaVA demonstrates impressive multimodel chat abilities, sometimes exhibiting the behaviors of multimodal GPT-4 on unseen images/instructions, and yields a 85.1% relative score compared with GPT-4 on a synthetic multimodal instruction-following dataset. When fine-tuned on Science QA, the synergy of LLaVA and GPT-4 achieves a new state-of-the-art accuracy of 92.53%. We make GPT-4 generated visual instruction tuning data, our model and code base publicly available.",
+            "notes": null
+          },
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 31,
+          "function_name": "main",
+          "code": "llava()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 127,
+          "function_name": "llava",
+          "code": "text(\"Vision encoder: CLIP\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Vision encoder: CLIP",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 31,
+          "function_name": "main",
+          "code": "llava()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 128,
+          "function_name": "llava",
+          "code": "text(\"Text decoder: Vicuna (LLaMA fine-tuned on ShareGPT conversations) \"), post_link(\"https://www.lmsys.org/blog/2023-03-30-vicuna/\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Text decoder: Vicuna (LLaMA fine-tuned on ShareGPT conversations) ",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        },
+        {
+          "type": "link",
+          "data": "[post]",
+          "style": {},
+          "external_link": {
+            "title": "post",
+            "authors": null,
+            "organization": null,
+            "date": null,
+            "url": "https://www.lmsys.org/blog/2023-03-30-vicuna/",
+            "description": null,
+            "notes": null
+          },
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 31,
+          "function_name": "main",
+          "code": "llava()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 130,
+          "function_name": "llava",
+          "code": "text(\"Data:\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Data:",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 31,
+          "function_name": "main",
+          "code": "llava()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 131,
+          "function_name": "llava",
+          "code": "text(\"- MS COCO has images annotated with bounding boxes and Mechanical Turk captions\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- MS COCO has images annotated with bounding boxes and Mechanical Turk captions",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 31,
+          "function_name": "main",
+          "code": "llava()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 132,
+          "function_name": "llava",
+          "code": "text(\"- Prompt GPT-4 with captions or detected objects and generate questions or conversations\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Prompt GPT-4 with captions or detected objects and generate questions or conversations",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 31,
+          "function_name": "main",
+          "code": "llava()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 133,
+          "function_name": "llava",
+          "code": "text(\"- Pair generations with original images\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Pair generations with original images",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 31,
+          "function_name": "main",
+          "code": "llava()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 134,
+          "function_name": "llava",
+          "code": "text(\"- 158K examples\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- 158K examples",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 31,
+          "function_name": "main",
+          "code": "llava()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 135,
+          "function_name": "llava",
+          "code": "image(\"images/llava-gen.png\", width=600)"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "image",
+          "data": "images/llava-gen.png",
+          "style": {
+            "width": 600
+          },
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 31,
+          "function_name": "main",
+          "code": "llava()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 137,
+          "function_name": "llava",
+          "code": "text(\"Model:\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Model:",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 31,
+          "function_name": "main",
+          "code": "llava()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 138,
+          "function_name": "llava",
+          "code": "text(\"- Encode images with CLIP (ViT-L/14)\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Encode images with CLIP (ViT-L/14)",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 31,
+          "function_name": "main",
+          "code": "llava()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 139,
+          "function_name": "llava",
+          "code": "text(\"- Linear projection (W) into embedding space (Flamingo and Q-former are more complex)\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Linear projection (W) into embedding space (Flamingo and Q-former are more complex)",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 31,
+          "function_name": "main",
+          "code": "llava()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 140,
+          "function_name": "llava",
+          "code": "image(\"images/llava-architecture.png\", width=600)"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "image",
+          "data": "images/llava-architecture.png",
+          "style": {
+            "width": 600
+          },
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 31,
+          "function_name": "main",
+          "code": "llava()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 142,
+          "function_name": "llava",
+          "code": "text(\"Training:\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Training:",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 31,
+          "function_name": "main",
+          "code": "llava()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 143,
+          "function_name": "llava",
+          "code": "text(\"- Stage 1 (alignment): freeze vision encoder and language model, only train W\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Stage 1 (alignment): freeze vision encoder and language model, only train W",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 31,
+          "function_name": "main",
+          "code": "llava()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 144,
+          "function_name": "llava",
+          "code": "text(\"- Stage 2 (fine-tuning): freeze vision encoder and train W and language model\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Stage 2 (fine-tuning): freeze vision encoder and train W and language model",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 31,
+          "function_name": "main",
+          "code": "llava()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 145,
+          "function_name": "llava",
+          "code": "image(\"images/llava-example.png\", width=600)"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "image",
+          "data": "images/llava-example.png",
+          "style": {
+            "width": 600
+          },
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 31,
+          "function_name": "main",
+          "code": "llava()"
+        }
+      ],
+      "env": {},
+      "renderings": []
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 32,
+          "function_name": "main",
+          "code": "llava_onevision()"
+        }
+      ],
+      "env": {},
+      "renderings": []
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 32,
+          "function_name": "main",
+          "code": "llava_onevision()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 148,
+          "function_name": "llava_onevision",
+          "code": "def llava_onevision():"
+        }
+      ],
+      "env": {},
+      "renderings": []
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 32,
+          "function_name": "main",
+          "code": "llava_onevision()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 149,
+          "function_name": "llava_onevision",
+          "code": "text(\"LLaVA OneVision \"), link(\"https://arxiv.org/pdf/2408.03326\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "LLaVA OneVision ",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        },
+        {
+          "type": "link",
+          "data": "[Li+ 2024]",
+          "style": {},
+          "external_link": {
+            "title": "LLaVA-OneVision: Easy Visual Task Transfer",
+            "authors": [
+              "Bo Li",
+              "Yuanhan Zhang",
+              "Dong Guo",
+              "Renrui Zhang",
+              "Feng Li",
+              "Hao Zhang",
+              "Kaichen Zhang",
+              "Peiyuan Zhang",
+              "Yanwei Li",
+              "Ziwei Liu",
+              "Chunyuan Li"
+            ],
+            "organization": null,
+            "date": "2024-08-06",
+            "url": "https://arxiv.org/pdf/2408.03326",
+            "description": "We present LLaVA-OneVision, a family of open large multimodal models (LMMs) developed by consolidating our insights into data, models, and visual representations in the LLaVA-NeXT blog series. Our experimental results demonstrate that LLaVA-OneVision is the first single model that can simultaneously push the performance boundaries of open LMMs in three important computer vision scenarios: single-image, multi-image, and video scenarios. Importantly, the design of LLaVA-OneVision allows strong transfer learning across different modalities/scenarios, yielding new emerging capabilities. In particular, strong video understanding and cross-scenario capabilities are demonstrated through task transfer from images to videos.",
+            "notes": null
+          },
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 32,
+          "function_name": "main",
+          "code": "llava_onevision()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 150,
+          "function_name": "llava_onevision",
+          "code": "text(\"- Latest version in the LLaVA series (after LLaVA 1.5, LLaVA-Next)\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Latest version in the LLaVA series (after LLaVA 1.5, LLaVA-Next)",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 32,
+          "function_name": "main",
+          "code": "llava_onevision()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 151,
+          "function_name": "llava_onevision",
+          "code": "text(\"- Handle multiple images, video\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Handle multiple images, video",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 32,
+          "function_name": "main",
+          "code": "llava_onevision()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 153,
+          "function_name": "llava_onevision",
+          "code": "image(\"images/llava-onevision.png\", width=600)"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "image",
+          "data": "images/llava-onevision.png",
+          "style": {
+            "width": 600
+          },
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 32,
+          "function_name": "main",
+          "code": "llava_onevision()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 154,
+          "function_name": "llava_onevision",
+          "code": "text(\"- Vision encoder: SigLIP (use grid features before and after last Transformer layer)\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Vision encoder: SigLIP (use grid features before and after last Transformer layer)",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 32,
+          "function_name": "main",
+          "code": "llava_onevision()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 155,
+          "function_name": "llava_onevision",
+          "code": "text(\"- Text decoder: Qwen-2 72B\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Text decoder: Qwen-2 72B",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 32,
+          "function_name": "main",
+          "code": "llava_onevision()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 156,
+          "function_name": "llava_onevision",
+          "code": "text(\"- Projector: 2-layer MLP\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Projector: 2-layer MLP",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 32,
+          "function_name": "main",
+          "code": "llava_onevision()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 158,
+          "function_name": "llava_onevision",
+          "code": "text(\"Data processing:\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Data processing:",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 32,
+          "function_name": "main",
+          "code": "llava_onevision()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 159,
+          "function_name": "llava_onevision",
+          "code": "text(\"- Preserving high resolution is important (e.g., for OCR)\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Preserving high resolution is important (e.g., for OCR)",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 32,
+          "function_name": "main",
+          "code": "llava_onevision()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 160,
+          "function_name": "llava_onevision",
+          "code": "text(\"- CLIP resizes and crops to 336x336, which loses information\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- CLIP resizes and crops to 336x336, which loses information",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 32,
+          "function_name": "main",
+          "code": "llava_onevision()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 161,
+          "function_name": "llava_onevision",
+          "code": "text(\"- Solution: AnyRes, introduced in LLaVA 1.5 \"), link(title=\"paper\", url=\"https://static.hliu.cc/files/llava/improved_llava.pdf\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Solution: AnyRes, introduced in LLaVA 1.5 ",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        },
+        {
+          "type": "link",
+          "data": "[paper]",
+          "style": {},
+          "external_link": {
+            "title": "paper",
+            "authors": null,
+            "organization": null,
+            "date": null,
+            "url": "https://static.hliu.cc/files/llava/improved_llava.pdf",
+            "description": null,
+            "notes": null
+          },
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 32,
+          "function_name": "main",
+          "code": "llava_onevision()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 162,
+          "function_name": "llava_onevision",
+          "code": "text(\"- Break up image into a x b pieces (matching resolution of vision encoder), encode, concatenate\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Break up image into a x b pieces (matching resolution of vision encoder), encode, concatenate",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 32,
+          "function_name": "main",
+          "code": "llava_onevision()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 163,
+          "function_name": "llava_onevision",
+          "code": "text(\"- If too many tokens (original image is too high resolution), then use bilinear interpolation\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- If too many tokens (original image is too high resolution), then use bilinear interpolation",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 32,
+          "function_name": "main",
+          "code": "llava_onevision()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 164,
+          "function_name": "llava_onevision",
+          "code": "image(\"images/llava-onevision-anyres.png\", width=600)"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "image",
+          "data": "images/llava-onevision-anyres.png",
+          "style": {
+            "width": 600
+          },
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 32,
+          "function_name": "main",
+          "code": "llava_onevision()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 165,
+          "function_name": "llava_onevision",
+          "code": "text(\"Handle 3 types of input (single image, multiple images, video):\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Handle 3 types of input (single image, multiple images, video):",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 32,
+          "function_name": "main",
+          "code": "llava_onevision()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 166,
+          "function_name": "llava_onevision",
+          "code": "text(\"- Goal: make all of the modalities produce roughly the same length\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Goal: make all of the modalities produce roughly the same length",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 32,
+          "function_name": "main",
+          "code": "llava_onevision()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 167,
+          "function_name": "llava_onevision",
+          "code": "image(\"images/llava-onevision-modalities.png\", width=600)"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "image",
+          "data": "images/llava-onevision-modalities.png",
+          "style": {
+            "width": 600
+          },
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 32,
+          "function_name": "main",
+          "code": "llava_onevision()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 168,
+          "function_name": "llava_onevision",
+          "code": "text(\"- Single image: use higher resolution\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Single image: use higher resolution",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 32,
+          "function_name": "main",
+          "code": "llava_onevision()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 169,
+          "function_name": "llava_onevision",
+          "code": "text(\"- Multiple images: use base resolution for each image\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Multiple images: use base resolution for each image",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 32,
+          "function_name": "main",
+          "code": "llava_onevision()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 170,
+          "function_name": "llava_onevision",
+          "code": "text(\"- Video: use lower resolution for each frame\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Video: use lower resolution for each frame",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 32,
+          "function_name": "main",
+          "code": "llava_onevision()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 172,
+          "function_name": "llava_onevision",
+          "code": "text(\"Data:\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Data:",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 32,
+          "function_name": "main",
+          "code": "llava_onevision()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 173,
+          "function_name": "llava_onevision",
+          "code": "text(\"- Philosophy: quality over quantity\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Philosophy: quality over quantity",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 32,
+          "function_name": "main",
+          "code": "llava_onevision()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 174,
+          "function_name": "llava_onevision",
+          "code": "image(\"images/llava-onevision-data-1.png\", width=700)"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "image",
+          "data": "images/llava-onevision-data-1.png",
+          "style": {
+            "width": 700
+          },
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 32,
+          "function_name": "main",
+          "code": "llava_onevision()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 175,
+          "function_name": "llava_onevision",
+          "code": "image(\"images/llava-onevision-data-2.png\", width=700)"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "image",
+          "data": "images/llava-onevision-data-2.png",
+          "style": {
+            "width": 700
+          },
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 32,
+          "function_name": "main",
+          "code": "llava_onevision()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 177,
+          "function_name": "llava_onevision",
+          "code": "text(\"Training:\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Training:",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 32,
+          "function_name": "main",
+          "code": "llava_onevision()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 178,
+          "function_name": "llava_onevision",
+          "code": "text(\"- Philosophy: easier to harder\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Philosophy: easier to harder",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 32,
+          "function_name": "main",
+          "code": "llava_onevision()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 179,
+          "function_name": "llava_onevision",
+          "code": "image(\"images/llava-onevision-training.png\", width=700)"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "image",
+          "data": "images/llava-onevision-training.png",
+          "style": {
+            "width": 700
+          },
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 32,
+          "function_name": "main",
+          "code": "llava_onevision()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 181,
+          "function_name": "llava_onevision",
+          "code": "text(\"Transfer between modalities:\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Transfer between modalities:",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 32,
+          "function_name": "main",
+          "code": "llava_onevision()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 182,
+          "function_name": "llava_onevision",
+          "code": "text(\"- Single image data for diagrams and charts, but generalize to multi-image\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Single image data for diagrams and charts, but generalize to multi-image",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 32,
+          "function_name": "main",
+          "code": "llava_onevision()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 183,
+          "function_name": "llava_onevision",
+          "code": "image(\"images/llava-onevision-transfer-s1.png\", width=600)"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "image",
+          "data": "images/llava-onevision-transfer-s1.png",
+          "style": {
+            "width": 600
+          },
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 32,
+          "function_name": "main",
+          "code": "llava_onevision()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 184,
+          "function_name": "llava_onevision",
+          "code": "text(\"- OCR on single image data, relational reasoning from multi-image data, generalize to GUI-based agents\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- OCR on single image data, relational reasoning from multi-image data, generalize to GUI-based agents",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 32,
+          "function_name": "main",
+          "code": "llava_onevision()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 185,
+          "function_name": "llava_onevision",
+          "code": "image(\"images/llava-onevision-transfer-s2.png\", width=600)"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "image",
+          "data": "images/llava-onevision-transfer-s2.png",
+          "style": {
+            "width": 600
+          },
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 32,
+          "function_name": "main",
+          "code": "llava_onevision()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 186,
+          "function_name": "llava_onevision",
+          "code": "text(\"- Visual prompting (circle) in single images, generalize to videos\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Visual prompting (circle) in single images, generalize to videos",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 32,
+          "function_name": "main",
+          "code": "llava_onevision()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 187,
+          "function_name": "llava_onevision",
+          "code": "image(\"images/llava-onevision-transfer-s8.png\", width=600)"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "image",
+          "data": "images/llava-onevision-transfer-s8.png",
+          "style": {
+            "width": 600
+          },
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 32,
+          "function_name": "main",
+          "code": "llava_onevision()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 189,
+          "function_name": "llava_onevision",
+          "code": "text(\"Summary:\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Summary:",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 32,
+          "function_name": "main",
+          "code": "llava_onevision()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 190,
+          "function_name": "llava_onevision",
+          "code": "text(\"- Standard VLM template: vision encoder + projector + LM\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Standard VLM template: vision encoder + projector + LM",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 32,
+          "function_name": "main",
+          "code": "llava_onevision()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 191,
+          "function_name": "llava_onevision",
+          "code": "text(\"- Most work goes into data curation (heavy on synthesized, task-specific data)\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Most work goes into data curation (heavy on synthesized, task-specific data)",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 32,
+          "function_name": "main",
+          "code": "llava_onevision()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 192,
+          "function_name": "llava_onevision",
+          "code": "text(\"- Open-source (released model weights and data)\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Open-source (released model weights and data)",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 32,
+          "function_name": "main",
+          "code": "llava_onevision()"
+        }
+      ],
+      "env": {},
+      "renderings": []
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 33,
+          "function_name": "main",
+          "code": "qwen_vl()"
+        }
+      ],
+      "env": {},
+      "renderings": []
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 33,
+          "function_name": "main",
+          "code": "qwen_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 195,
+          "function_name": "qwen_vl",
+          "code": "def qwen_vl():"
+        }
+      ],
+      "env": {},
+      "renderings": []
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 33,
+          "function_name": "main",
+          "code": "qwen_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 196,
+          "function_name": "qwen_vl",
+          "code": "text(\"Qwen-VL \"), link(\"https://arxiv.org/abs/2308.12966\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Qwen-VL ",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        },
+        {
+          "type": "link",
+          "data": "[Bai+ 2023]",
+          "style": {},
+          "external_link": {
+            "title": "Qwen-VL: A Versatile Vision-Language Model for Understanding, Localization, Text Reading, and Beyond",
+            "authors": [
+              "Jinze Bai",
+              "Shuai Bai",
+              "Shusheng Yang",
+              "Shijie Wang",
+              "Sinan Tan",
+              "Peng Wang",
+              "Junyang Lin",
+              "Chang Zhou",
+              "Jingren Zhou"
+            ],
+            "organization": null,
+            "date": "2023-08-24",
+            "url": "https://arxiv.org/abs/2308.12966",
+            "description": "In this work, we introduce the Qwen-VL series, a set of large-scale vision-language models (LVLMs) designed to perceive and understand both texts and images. Starting from the Qwen-LM as a foundation, we endow it with visual capacity by the meticulously designed (i) visual receptor, (ii) input-output interface, (iii) 3-stage training pipeline, and (iv) multilingual multimodal cleaned corpus. Beyond the conventional image description and question-answering, we implement the grounding and text-reading ability of Qwen-VLs by aligning image-caption-box tuples. The resulting models, including Qwen-VL and Qwen-VL-Chat, set new records for generalist models under similar model scales on a broad range of visual-centric benchmarks (e.g., image captioning, question answering, visual grounding) and different settings (e.g., zero-shot, few-shot). Moreover, on real-world dialog benchmarks, our instruction-tuned Qwen-VL-Chat also demonstrates superiority compared to existing vision-language chatbots. Code, demo and models are available at https://github.com/QwenLM/Qwen-VL.",
+            "notes": null
+          },
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 33,
+          "function_name": "main",
+          "code": "qwen_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 198,
+          "function_name": "qwen_vl",
+          "code": "text(\"Architecture:\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Architecture:",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 33,
+          "function_name": "main",
+          "code": "qwen_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 199,
+          "function_name": "qwen_vl",
+          "code": "text(\"- Vision encoder: OpenCLIP's ViT-bigC (14x14 patches) \"), link(\"https://arxiv.org/abs/2212.07143\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Vision encoder: OpenCLIP's ViT-bigC (14x14 patches) ",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        },
+        {
+          "type": "link",
+          "data": "[Cherti+ 2022]",
+          "style": {},
+          "external_link": {
+            "title": "Reproducible scaling laws for contrastive language-image learning",
+            "authors": [
+              "Mehdi Cherti",
+              "Romain Beaumont",
+              "Ross Wightman",
+              "Mitchell Wortsman",
+              "Gabriel Ilharco",
+              "Cade Gordon",
+              "Christoph Schuhmann",
+              "Ludwig Schmidt",
+              "Jenia Jitsev"
+            ],
+            "organization": null,
+            "date": "2022-12-14",
+            "url": "https://arxiv.org/abs/2212.07143",
+            "description": "Scaling up neural networks has led to remarkable performance across a wide range of tasks. Moreover, performance often follows reliable scaling laws as a function of training set size, model size, and compute, which offers valuable guidance as large-scale experiments are becoming increasingly expensive. However, previous work on scaling laws has primarily used private data \\& models or focused on uni-modal language or vision learning. To address these limitations, we investigate scaling laws for contrastive language-image pre-training (CLIP) with the public LAION dataset and the open-source OpenCLIP repository. Our large-scale experiments involve models trained on up to two billion image-text pairs and identify power law scaling for multiple downstream tasks including zero-shot classification, retrieval, linear probing, and end-to-end fine-tuning. We find that the training distribution plays a key role in scaling laws as the OpenAI and OpenCLIP models exhibit different scaling behavior despite identical model architectures and similar training recipes. We open-source our evaluation workflow and all models, including the largest public CLIP models, to ensure reproducibility and make scaling laws research more accessible. Source code and instructions to reproduce this study will be available at https://github.com/LAION-AI/scaling-laws-openclip",
+            "notes": null
+          },
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 33,
+          "function_name": "main",
+          "code": "qwen_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 200,
+          "function_name": "qwen_vl",
+          "code": "text(\"- Adaptor: one layer cross-attention, incorporate 2D positional encodings, maps to fixed length of 256\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Adaptor: one layer cross-attention, incorporate 2D positional encodings, maps to fixed length of 256",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 33,
+          "function_name": "main",
+          "code": "qwen_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 201,
+          "function_name": "qwen_vl",
+          "code": "text(\"- Special tokens: <img>, <box>, <ref>\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Special tokens: <img>, <box>, <ref>",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 33,
+          "function_name": "main",
+          "code": "qwen_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 203,
+          "function_name": "qwen_vl",
+          "code": "text(\"Training:\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Training:",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 33,
+          "function_name": "main",
+          "code": "qwen_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 204,
+          "function_name": "qwen_vl",
+          "code": "image(\"images/qwen-vl-stages.png\", width=700)"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "image",
+          "data": "images/qwen-vl-stages.png",
+          "style": {
+            "width": 700
+          },
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 33,
+          "function_name": "main",
+          "code": "qwen_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 205,
+          "function_name": "qwen_vl",
+          "code": "text(\"- Stage 1: large-scale low quality data; freeze LM, train vision encoder + adaptor\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Stage 1: large-scale low quality data; freeze LM, train vision encoder + adaptor",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 33,
+          "function_name": "main",
+          "code": "qwen_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 206,
+          "function_name": "qwen_vl",
+          "code": "image(\"images/qwen-vl-stage1.png\", width=400)"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "image",
+          "data": "images/qwen-vl-stage1.png",
+          "style": {
+            "width": 400
+          },
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 33,
+          "function_name": "main",
+          "code": "qwen_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 207,
+          "function_name": "qwen_vl",
+          "code": "text(\"- Stage 2: higher quality task-specific data, increase resolution; train all parameters\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Stage 2: higher quality task-specific data, increase resolution; train all parameters",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 33,
+          "function_name": "main",
+          "code": "qwen_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 208,
+          "function_name": "qwen_vl",
+          "code": "image(\"images/qwen-vl-stage2.png\", width=400)"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "image",
+          "data": "images/qwen-vl-stage2.png",
+          "style": {
+            "width": 400
+          },
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 33,
+          "function_name": "main",
+          "code": "qwen_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 209,
+          "function_name": "qwen_vl",
+          "code": "text(\"- Stage 3: instruction tuning data; freeze visual encoder, train adaptor + LM\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Stage 3: instruction tuning data; freeze visual encoder, train adaptor + LM",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 33,
+          "function_name": "main",
+          "code": "qwen_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 211,
+          "function_name": "qwen_vl",
+          "code": "image(\"images/qwen-vl-examples.png\", width=600)"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "image",
+          "data": "images/qwen-vl-examples.png",
+          "style": {
+            "width": 600
+          },
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 33,
+          "function_name": "main",
+          "code": "qwen_vl()"
+        }
+      ],
+      "env": {},
+      "renderings": []
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 34,
+          "function_name": "main",
+          "code": "qwen2_vl()"
+        }
+      ],
+      "env": {},
+      "renderings": []
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 34,
+          "function_name": "main",
+          "code": "qwen2_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 214,
+          "function_name": "qwen2_vl",
+          "code": "def qwen2_vl():"
+        }
+      ],
+      "env": {},
+      "renderings": []
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 34,
+          "function_name": "main",
+          "code": "qwen2_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 215,
+          "function_name": "qwen2_vl",
+          "code": "text(\"Qwen2-VL \"), link(\"https://arxiv.org/abs/2409.12191\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Qwen2-VL ",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        },
+        {
+          "type": "link",
+          "data": "[Wang+ 2024]",
+          "style": {},
+          "external_link": {
+            "title": "Qwen2-VL: Enhancing Vision-Language Model's Perception of the World at Any Resolution",
+            "authors": [
+              "Peng Wang",
+              "Shuai Bai",
+              "Sinan Tan",
+              "Shijie Wang",
+              "Zhihao Fan",
+              "Jinze Bai",
+              "Keqin Chen",
+              "Xuejing Liu",
+              "Jialin Wang",
+              "Wenbin Ge",
+              "Yang Fan",
+              "Kai Dang",
+              "Mengfei Du",
+              "Xuancheng Ren",
+              "Rui Men",
+              "Dayiheng Liu",
+              "Chang Zhou",
+              "Jingren Zhou",
+              "Junyang Lin"
+            ],
+            "organization": null,
+            "date": "2024-09-18",
+            "url": "https://arxiv.org/abs/2409.12191",
+            "description": "We present the Qwen2-VL Series, an advanced upgrade of the previous Qwen-VL models that redefines the conventional predetermined-resolution approach in visual processing. Qwen2-VL introduces the Naive Dynamic Resolution mechanism, which enables the model to dynamically process images of varying resolutions into different numbers of visual tokens. This approach allows the model to generate more efficient and accurate visual representations, closely aligning with human perceptual processes. The model also integrates Multimodal Rotary Position Embedding (M-RoPE), facilitating the effective fusion of positional information across text, images, and videos. We employ a unified paradigm for processing both images and videos, enhancing the model's visual perception capabilities. To explore the potential of large multimodal models, Qwen2-VL investigates the scaling laws for large vision-language models (LVLMs). By scaling both the model size-with versions at 2B, 8B, and 72B parameters-and the amount of training data, the Qwen2-VL Series achieves highly competitive performance. Notably, the Qwen2-VL-72B model achieves results comparable to leading models such as GPT-4o and Claude3.5-Sonnet across various multimodal benchmarks, outperforming other generalist models. Code is available at https://github.com/QwenLM/Qwen2-VL .",
+            "notes": null
+          },
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 34,
+          "function_name": "main",
+          "code": "qwen2_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 217,
+          "function_name": "qwen2_vl",
+          "code": "text(\"Visual encoder: larger ViT (675M)\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Visual encoder: larger ViT (675M)",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 34,
+          "function_name": "main",
+          "code": "qwen2_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 218,
+          "function_name": "qwen2_vl",
+          "code": "image(\"images/qwen2-vl-architecture.png\", width=700)"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "image",
+          "data": "images/qwen2-vl-architecture.png",
+          "style": {
+            "width": 700
+          },
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 34,
+          "function_name": "main",
+          "code": "qwen2_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 219,
+          "function_name": "qwen2_vl",
+          "code": "text(\"- Key: dynamic resolution to handle varying resolutions\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Key: dynamic resolution to handle varying resolutions",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 34,
+          "function_name": "main",
+          "code": "qwen2_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 220,
+          "function_name": "qwen2_vl",
+          "code": "text(\"- Each 224 x 224 patch encoded with ViT/14, compress every 2x2 => 66 tokens\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Each 224 x 224 patch encoded with ViT/14, compress every 2x2 => 66 tokens",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 34,
+          "function_name": "main",
+          "code": "qwen2_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 221,
+          "function_name": "qwen2_vl",
+          "code": "text(\"- Video: sample 2 frames/sec, max 16384 tokens\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Video: sample 2 frames/sec, max 16384 tokens",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 34,
+          "function_name": "main",
+          "code": "qwen2_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 223,
+          "function_name": "qwen2_vl",
+          "code": "text(\"Multimodal Rotary Position Embedding (MRoPE):\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Multimodal Rotary Position Embedding (MRoPE):",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 34,
+          "function_name": "main",
+          "code": "qwen2_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 224,
+          "function_name": "qwen2_vl",
+          "code": "image(\"images/qwen2-vl-mrope.png\", width=600)"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "image",
+          "data": "images/qwen2-vl-mrope.png",
+          "style": {
+            "width": 600
+          },
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 34,
+          "function_name": "main",
+          "code": "qwen2_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 226,
+          "function_name": "qwen2_vl",
+          "code": "text(\"Initialize LM with Qwen2 and vision encoder from DFN \"), link(\"https://arxiv.org/abs/2309.17425\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Initialize LM with Qwen2 and vision encoder from DFN ",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        },
+        {
+          "type": "link",
+          "data": "[Fang+ 2023]",
+          "style": {},
+          "external_link": {
+            "title": "Data Filtering Networks",
+            "authors": [
+              "Alex Fang",
+              "Albin Madappally Jose",
+              "Amit Jain",
+              "Ludwig Schmidt",
+              "Alexander Toshev",
+              "Vaishaal Shankar"
+            ],
+            "organization": null,
+            "date": "2023-09-29",
+            "url": "https://arxiv.org/abs/2309.17425",
+            "description": "Large training sets have become a cornerstone of machine learning and are the foundation for recent advances in language modeling and multimodal learning. While data curation for pre-training is often still ad-hoc, one common paradigm is to first collect a massive pool of data from the Web and then filter this candidate pool down to an actual training set via various heuristics. In this work, we study the problem of learning a data filtering network (DFN) for this second step of filtering a large uncurated dataset. Our key finding is that the quality of a network for filtering is distinct from its performance on downstream tasks: for instance, a model that performs well on ImageNet can yield worse training sets than a model with low ImageNet accuracy that is trained on a small amount of high-quality data. Based on our insights, we construct new data filtering networks that induce state-of-the-art image-text datasets. Specifically, our best performing dataset DFN-5B enables us to train state-of-the-art CLIP models for their compute budgets: among other improvements on a variety of tasks, a ViT-H trained on our dataset achieves 84.4% zero-shot transfer accuracy on ImageNet, out-performing models trained on other datasets such as LAION-2B, DataComp-1B, or OpenAI's WIT. In order to facilitate further research in dataset design, we also release a new 2 billion example dataset DFN-2B and show that high performance data filtering networks can be trained from scratch using only publicly available data.",
+            "notes": null
+          },
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 34,
+          "function_name": "main",
+          "code": "qwen2_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 227,
+          "function_name": "qwen2_vl",
+          "code": "text(\"Training (similar to Qwen-VL):\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Training (similar to Qwen-VL):",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 34,
+          "function_name": "main",
+          "code": "qwen2_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 228,
+          "function_name": "qwen2_vl",
+          "code": "text(\"- Stage 1: train only visual encoder\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Stage 1: train only visual encoder",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 34,
+          "function_name": "main",
+          "code": "qwen2_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 229,
+          "function_name": "qwen2_vl",
+          "code": "text(\"- Stage 2: train all parameters\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Stage 2: train all parameters",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 34,
+          "function_name": "main",
+          "code": "qwen2_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 230,
+          "function_name": "qwen2_vl",
+          "code": "text(\"- Stage 3: train language model on instruction following datasets\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Stage 3: train language model on instruction following datasets",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 34,
+          "function_name": "main",
+          "code": "qwen2_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 232,
+          "function_name": "qwen2_vl",
+          "code": "text(\"Many capabilities:\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Many capabilities:",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 34,
+          "function_name": "main",
+          "code": "qwen2_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 233,
+          "function_name": "qwen2_vl",
+          "code": "image(\"images/qwen2-vl-capabilities.png\", width=700)"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "image",
+          "data": "images/qwen2-vl-capabilities.png",
+          "style": {
+            "width": 700
+          },
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 34,
+          "function_name": "main",
+          "code": "qwen2_vl()"
+        }
+      ],
+      "env": {},
+      "renderings": []
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 35,
+          "function_name": "main",
+          "code": "qwen3_vl()"
+        }
+      ],
+      "env": {},
+      "renderings": []
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 35,
+          "function_name": "main",
+          "code": "qwen3_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 236,
+          "function_name": "qwen3_vl",
+          "code": "def qwen3_vl():"
+        }
+      ],
+      "env": {},
+      "renderings": []
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 35,
+          "function_name": "main",
+          "code": "qwen3_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 237,
+          "function_name": "qwen3_vl",
+          "code": "text(\"Qwen3-VL \"), link(\"https://arxiv.org/abs/2511.21631\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Qwen3-VL ",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        },
+        {
+          "type": "link",
+          "data": "[Bai+ 2025]",
+          "style": {},
+          "external_link": {
+            "title": "Qwen3-VL Technical Report",
+            "authors": [
+              "Shuai Bai",
+              "Yuxuan Cai",
+              "Ruizhe Chen",
+              "Keqin Chen",
+              "Xionghui Chen",
+              "Zesen Cheng",
+              "Lianghao Deng",
+              "Wei Ding",
+              "Chang Gao",
+              "Chunjiang Ge",
+              "Wenbin Ge",
+              "Zhifang Guo",
+              "Qidong Huang",
+              "Jie Huang",
+              "Fei Huang",
+              "Binyuan Hui",
+              "Shutong Jiang",
+              "Zhaohai Li",
+              "Mingsheng Li",
+              "Mei Li",
+              "Kaixin Li",
+              "Zicheng Lin",
+              "Junyang Lin",
+              "Xuejing Liu",
+              "Jiawei Liu",
+              "Chenglong Liu",
+              "Yang Liu",
+              "Dayiheng Liu",
+              "Shixuan Liu",
+              "Dunjie Lu",
+              "Ruilin Luo",
+              "Chenxu Lv",
+              "Rui Men",
+              "Lingchen Meng",
+              "Xuancheng Ren",
+              "Xingzhang Ren",
+              "Sibo Song",
+              "Yuchong Sun",
+              "Jun Tang",
+              "Jianhong Tu",
+              "Jianqiang Wan",
+              "Peng Wang",
+              "Pengfei Wang",
+              "Qiuyue Wang",
+              "Yuxuan Wang",
+              "Tianbao Xie",
+              "Yiheng Xu",
+              "Haiyang Xu",
+              "Jin Xu",
+              "Zhibo Yang",
+              "Mingkun Yang",
+              "Jianxin Yang",
+              "An Yang",
+              "Bowen Yu",
+              "Fei Zhang",
+              "Hang Zhang",
+              "Xi Zhang",
+              "Bo Zheng",
+              "Humen Zhong",
+              "Jingren Zhou",
+              "Fan Zhou",
+              "Jing Zhou",
+              "Yuanzhi Zhu",
+              "Ke Zhu"
+            ],
+            "organization": null,
+            "date": "2025-11-26",
+            "url": "https://arxiv.org/abs/2511.21631",
+            "description": "We introduce Qwen3-VL, the most capable vision-language model in the Qwen series to date, achieving superior performance across a broad range of multimodal benchmarks. It natively supports interleaved contexts of up to 256K tokens, seamlessly integrating text, images, and video. The model family includes both dense (2B/4B/8B/32B) and mixture-of-experts (30B-A3B/235B-A22B) variants to accommodate diverse latency-quality trade-offs. Qwen3-VL delivers three core pillars: (i) markedly stronger pure-text understanding, surpassing comparable text-only backbones in several cases; (ii) robust long-context comprehension with a native 256K-token window for both text and interleaved multimodal inputs, enabling faithful retention, retrieval, and cross-referencing across long documents and videos; and (iii) advanced multimodal reasoning across single-image, multi-image, and video tasks, demonstrating leading performance on comprehensive evaluations such as MMMU and visual-math benchmarks (e.g., MathVista and MathVision). Architecturally, we introduce three key upgrades: (i) an enhanced interleaved-MRoPE for stronger spatial-temporal modeling across images and video; (ii) DeepStack integration, which effectively leverages multi-level ViT features to tighten vision-language alignment; and (iii) text-based time alignment for video, evolving from T-RoPE to explicit textual timestamp alignment for more precise temporal grounding. Under comparable token budgets and latency constraints, Qwen3-VL achieves superior performance in both dense and Mixture-of-Experts (MoE) architectures. We envision Qwen3-VL serving as a foundational engine for image-grounded reasoning, agentic decision-making, and multimodal code intelligence in real-world workflows.",
+            "notes": null
+          },
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 35,
+          "function_name": "main",
+          "code": "qwen3_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 238,
+          "function_name": "qwen3_vl",
+          "code": "image(\"images/qwen3-vl.png\", width=700)"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "image",
+          "data": "images/qwen3-vl.png",
+          "style": {
+            "width": 700
+          },
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 35,
+          "function_name": "main",
+          "code": "qwen3_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 240,
+          "function_name": "qwen3_vl",
+          "code": "text(\"Language model:\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Language model:",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 35,
+          "function_name": "main",
+          "code": "qwen3_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 241,
+          "function_name": "qwen3_vl",
+          "code": "text(\"- Qwen-3 models (dense and MoE models up to 235B-A22B)\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Qwen-3 models (dense and MoE models up to 235B-A22B)",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 35,
+          "function_name": "main",
+          "code": "qwen3_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 242,
+          "function_name": "qwen3_vl",
+          "code": "text(\"- Long context understanding (256K)\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Long context understanding (256K)",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 35,
+          "function_name": "main",
+          "code": "qwen3_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 244,
+          "function_name": "qwen3_vl",
+          "code": "text(\"Vision encoder:\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Vision encoder:",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 35,
+          "function_name": "main",
+          "code": "qwen3_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 245,
+          "function_name": "qwen3_vl",
+          "code": "text(\"- SigLIP-2 (same architecture as SigLIP) \"), link(\"https://arxiv.org/pdf/2502.14786\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- SigLIP-2 (same architecture as SigLIP) ",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        },
+        {
+          "type": "link",
+          "data": "[Tschannen+ 2025]",
+          "style": {},
+          "external_link": {
+            "title": "SigLIP 2: Multilingual Vision-Language Encoders with Improved Semantic Understanding, Localization, and Dense Features",
+            "authors": [
+              "Michael Tschannen",
+              "Alexey Gritsenko",
+              "Xiao Wang",
+              "Muhammad Ferjad Naeem",
+              "Ibrahim Alabdulmohsin",
+              "Nikhil Parthasarathy",
+              "Talfan Evans",
+              "Lucas Beyer",
+              "Ye Xia",
+              "Basil Mustafa",
+              "Olivier H\u00e9naff",
+              "Jeremiah Harmsen",
+              "Andreas Steiner",
+              "Xiaohua Zhai"
+            ],
+            "organization": null,
+            "date": "2025-02-20",
+            "url": "https://arxiv.org/pdf/2502.14786",
+            "description": "We introduce SigLIP 2, a family of new multilingual vision-language encoders that build on the success of the original SigLIP. In this second iteration, we extend the original image-text training objective with several prior, independently developed techniques into a unified recipe -- this includes captioning-based pretraining, self-supervised losses (self-distillation, masked prediction) and online data curation. With these changes, SigLIP 2 models outperform their SigLIP counterparts at all model scales in core capabilities, including zero-shot classification, image-text retrieval, and transfer performance when extracting visual representations for Vision-Language Models (VLMs). Furthermore, the new training recipe leads to significant improvements on localization and dense prediction tasks. We also train variants which support multiple resolutions and preserve the input's native aspect ratio. Finally, we train on a more diverse data-mixture that includes de-biasing techniques, leading to much better multilingual understanding and improved fairness. To allow users to trade off inference cost with performance, we release model checkpoints at four sizes: ViT-B (86M), L (303M), So400m (400M), and g (1B).",
+            "notes": null
+          },
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 35,
+          "function_name": "main",
+          "code": "qwen3_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 246,
+          "function_name": "qwen3_vl",
+          "code": "text(\"- Interleaved MRoPE: distribute all axes (temporal, width, height) to low- and high-frequency bands\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Interleaved MRoPE: distribute all axes (temporal, width, height) to low- and high-frequency bands",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 35,
+          "function_name": "main",
+          "code": "qwen3_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 247,
+          "function_name": "qwen3_vl",
+          "code": "text(\"... [t w h t w h t w h t w h] rather than [t t t t w w w w h h h h]\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "... [t w h t w h t w h t w h] rather than [t t t t w w w w h h h h]",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 35,
+          "function_name": "main",
+          "code": "qwen3_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 248,
+          "function_name": "qwen3_vl",
+          "code": "text(\"- Add explicit video timestamps (as separate tokens rather in positional embeddings)\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Add explicit video timestamps (as separate tokens rather in positional embeddings)",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 35,
+          "function_name": "main",
+          "code": "qwen3_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 249,
+          "function_name": "qwen3_vl",
+          "code": "text(\"- Square-root-normalized per-token loss: balance text and multimodal data (video examples are long, don't want to dominate)\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Square-root-normalized per-token loss: balance text and multimodal data (video examples are long, don't want to dominate)",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 35,
+          "function_name": "main",
+          "code": "qwen3_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 251,
+          "function_name": "qwen3_vl",
+          "code": "text(\"Adapter:\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Adapter:",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 35,
+          "function_name": "main",
+          "code": "qwen3_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 252,
+          "function_name": "qwen3_vl",
+          "code": "text(\"- DeepStack: cross-layer fusion to inject visual information into multiple layers \"), link(\"https://arxiv.org/abs/2406.04334\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- DeepStack: cross-layer fusion to inject visual information into multiple layers ",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        },
+        {
+          "type": "link",
+          "data": "[Meng+ 2024]",
+          "style": {},
+          "external_link": {
+            "title": "DeepStack: Deeply Stacking Visual Tokens is Surprisingly Simple and Effective for LMMs",
+            "authors": [
+              "Lingchen Meng",
+              "Jianwei Yang",
+              "Rui Tian",
+              "Xiyang Dai",
+              "Zuxuan Wu",
+              "Jianfeng Gao",
+              "Yu-Gang Jiang"
+            ],
+            "organization": null,
+            "date": "2024-06-06",
+            "url": "https://arxiv.org/abs/2406.04334",
+            "description": "Most large multimodal models (LMMs) are implemented by feeding visual tokens as a sequence into the first layer of a large language model (LLM). The resulting architecture is simple but significantly increases computation and memory costs, as it has to handle a large number of additional tokens in its input layer. This paper presents a new architecture DeepStack for LMMs. Considering $N$ layers in the language and vision transformer of LMMs, we stack the visual tokens into $N$ groups and feed each group to its aligned transformer layer \\textit{from bottom to top}. Surprisingly, this simple method greatly enhances the power of LMMs to model interactions among visual tokens across layers but with minimal additional cost. We apply DeepStack to both language and vision transformer in LMMs, and validate the effectiveness of DeepStack LMMs with extensive empirical results. Using the same context length, our DeepStack 7B and 13B parameters surpass their counterparts by \\textbf{2.7} and \\textbf{2.9} on average across \\textbf{9} benchmarks, respectively. Using only one-fifth of the context length, DeepStack rivals closely to the counterparts that use the full context length. These gains are particularly pronounced on high-resolution tasks, e.g., \\textbf{4.2}, \\textbf{11.0}, and \\textbf{4.0} improvements on TextVQA, DocVQA, and InfoVQA compared to LLaVA-1.5-7B, respectively. We further apply DeepStack to vision transformer layers, which brings us a similar amount of improvements, \\textbf{3.8} on average compared with LLaVA-1.5-7B.",
+            "notes": null
+          },
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 35,
+          "function_name": "main",
+          "code": "qwen3_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 254,
+          "function_name": "qwen3_vl",
+          "code": "text(\"Training:\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Training:",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 35,
+          "function_name": "main",
+          "code": "qwen3_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 255,
+          "function_name": "qwen3_vl",
+          "code": "text(\"- Pre-training has 4 stages (train adapter, train all parameters on 8K, 32K, 256K lengths)\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Pre-training has 4 stages (train adapter, train all parameters on 8K, 32K, 256K lengths)",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 35,
+          "function_name": "main",
+          "code": "qwen3_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 256,
+          "function_name": "qwen3_vl",
+          "code": "image(\"images/qwen3-vl-pretraining.png\", width=600)"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "image",
+          "data": "images/qwen3-vl-pretraining.png",
+          "style": {
+            "width": 600
+          },
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 35,
+          "function_name": "main",
+          "code": "qwen3_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 257,
+          "function_name": "qwen3_vl",
+          "code": "text(\"- Post-training: SFT on long CoT data, knowledge distillation, RL\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Post-training: SFT on long CoT data, knowledge distillation, RL",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 35,
+          "function_name": "main",
+          "code": "qwen3_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 259,
+          "function_name": "qwen3_vl",
+          "code": "image(\"images/qwen3-vl-results.png\", width=600)"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "image",
+          "data": "images/qwen3-vl-results.png",
+          "style": {
+            "width": 600
+          },
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 35,
+          "function_name": "main",
+          "code": "qwen3_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 261,
+          "function_name": "qwen3_vl",
+          "code": "text(\"Summary:\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Summary:",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 35,
+          "function_name": "main",
+          "code": "qwen3_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 262,
+          "function_name": "qwen3_vl",
+          "code": "text(\"- SOTA performance\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- SOTA performance",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 35,
+          "function_name": "main",
+          "code": "qwen3_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 263,
+          "function_name": "qwen3_vl",
+          "code": "text(\"- Lots of data work, but not many details\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Lots of data work, but not many details",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 35,
+          "function_name": "main",
+          "code": "qwen3_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 264,
+          "function_name": "qwen3_vl",
+          "code": "text(\"- Minor but potentially important architectural improvements\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Minor but potentially important architectural improvements",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 35,
+          "function_name": "main",
+          "code": "qwen3_vl()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 265,
+          "function_name": "qwen3_vl",
+          "code": "text(\"- Scale up\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Scale up",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 35,
+          "function_name": "main",
+          "code": "qwen3_vl()"
+        }
+      ],
+      "env": {},
+      "renderings": []
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 38,
+          "function_name": "main",
+          "code": "chameleon()"
+        }
+      ],
+      "env": {},
+      "renderings": []
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 38,
+          "function_name": "main",
+          "code": "chameleon()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 268,
+          "function_name": "chameleon",
+          "code": "def chameleon():"
+        }
+      ],
+      "env": {},
+      "renderings": []
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 38,
+          "function_name": "main",
+          "code": "chameleon()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 269,
+          "function_name": "chameleon",
+          "code": "text(\"Chameleon \"), link(\"https://arxiv.org/pdf/2405.09818\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Chameleon ",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        },
+        {
+          "type": "link",
+          "data": "[Chameleon Team 2024]",
+          "style": {},
+          "external_link": {
+            "title": "Chameleon: Mixed-Modal Early-Fusion Foundation Models",
+            "authors": [
+              "Chameleon Team"
+            ],
+            "organization": null,
+            "date": "2024-05-16",
+            "url": "https://arxiv.org/pdf/2405.09818",
+            "description": "We present Chameleon, a family of early-fusion token-based mixed-modal models capable of understanding and generating images and text in any arbitrary sequence. We outline a stable training approach from inception, an alignment recipe, and an architectural parameterization tailored for the early-fusion, token-based, mixed-modal setting. The models are evaluated on a comprehensive range of tasks, including visual question answering, image captioning, text generation, image generation, and long-form mixed modal generation. Chameleon demonstrates broad and general capabilities, including state-of-the-art performance in image captioning tasks, outperforms Llama-2 in text-only tasks while being competitive with models such as Mixtral 8x7B and Gemini-Pro, and performs non-trivial image generation, all in a single model. It also matches or exceeds the performance of much larger models, including Gemini Pro and GPT-4V, according to human judgments on a new long-form mixed-modal generation evaluation, where either the prompt or outputs contain mixed sequences of both images and text. Chameleon marks a significant step forward in a unified modeling of full multimodal documents.",
+            "notes": null
+          },
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 38,
+          "function_name": "main",
+          "code": "chameleon()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 271,
+          "function_name": "chameleon",
+          "code": "text(\"So far: VLMs encode images (via CLIP or SigLIP), inject into LM\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "So far: VLMs encode images (via CLIP or SigLIP), inject into LM",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 38,
+          "function_name": "main",
+          "code": "chameleon()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 272,
+          "function_name": "chameleon",
+          "code": "text(\"Disadvantage: can't generate images (need diffusion)\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Disadvantage: can't generate images (need diffusion)",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 38,
+          "function_name": "main",
+          "code": "chameleon()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 274,
+          "function_name": "chameleon",
+          "code": "text(\"Chameleon: map everything into discrete tokens\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Chameleon: map everything into discrete tokens",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 38,
+          "function_name": "main",
+          "code": "chameleon()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 275,
+          "function_name": "chameleon",
+          "code": "text(\"Advantage: can analyze and generate images in a uniform way\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Advantage: can analyze and generate images in a uniform way",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 38,
+          "function_name": "main",
+          "code": "chameleon()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 276,
+          "function_name": "chameleon",
+          "code": "image(\"images/chameleon.png\", width=600)"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "image",
+          "data": "images/chameleon.png",
+          "style": {
+            "width": 600
+          },
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 38,
+          "function_name": "main",
+          "code": "chameleon()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 277,
+          "function_name": "chameleon",
+          "code": "image(\"images/chameleon-example.png\", width=600)"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "image",
+          "data": "images/chameleon-example.png",
+          "style": {
+            "width": 600
+          },
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 38,
+          "function_name": "main",
+          "code": "chameleon()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 279,
+          "function_name": "chameleon",
+          "code": "text(\"Vision encoder \"), link(\"https://arxiv.org/pdf/2203.13131\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Vision encoder ",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        },
+        {
+          "type": "link",
+          "data": "[Gafni+ 2022]",
+          "style": {},
+          "external_link": {
+            "title": "Make-A-Scene: Scene-Based Text-to-Image Generation with Human Priors",
+            "authors": [
+              "Oran Gafni",
+              "Adam Polyak",
+              "Oron Ashual",
+              "Shelly Sheynin",
+              "Devi Parikh",
+              "Yaniv Taigman"
+            ],
+            "organization": null,
+            "date": "2022-03-24",
+            "url": "https://arxiv.org/pdf/2203.13131",
+            "description": "Recent text-to-image generation methods provide a simple yet exciting conversion capability between text and image domains. While these methods have incrementally improved the generated image fidelity and text relevancy, several pivotal gaps remain unanswered, limiting applicability and quality. We propose a novel text-to-image method that addresses these gaps by (i) enabling a simple control mechanism complementary to text in the form of a scene, (ii) introducing elements that substantially improve the tokenization process by employing domain-specific knowledge over key image regions (faces and salient objects), and (iii) adapting classifier-free guidance for the transformer use case. Our model achieves state-of-the-art FID and human evaluation results, unlocking the ability to generate high fidelity images in a resolution of 512x512 pixels, significantly improving visual quality. Through scene controllability, we introduce several new capabilities: (i) Scene editing, (ii) text editing with anchor scenes, (iii) overcoming out-of-distribution text prompts, and (iv) story illustration generation, as demonstrated in the story we wrote.",
+            "notes": null
+          },
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 38,
+          "function_name": "main",
+          "code": "chameleon()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 280,
+          "function_name": "chameleon",
+          "code": "text(\"- Key difference: encoder needs to map to discrete tokens (so we can generate them)\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Key difference: encoder needs to map to discrete tokens (so we can generate them)",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 38,
+          "function_name": "main",
+          "code": "chameleon()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 281,
+          "function_name": "chameleon",
+          "code": "text(\"- VQ-VAE (Vector Quantized Variational Autoencoder) \"), link(\"https://arxiv.org/pdf/1711.00937\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- VQ-VAE (Vector Quantized Variational Autoencoder) ",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        },
+        {
+          "type": "link",
+          "data": "[Oord+ 2017]",
+          "style": {},
+          "external_link": {
+            "title": "Neural Discrete Representation Learning",
+            "authors": [
+              "Aaron van den Oord",
+              "Oriol Vinyals",
+              "Koray Kavukcuoglu"
+            ],
+            "organization": null,
+            "date": "2017-11-02",
+            "url": "https://arxiv.org/pdf/1711.00937",
+            "description": "Learning useful representations without supervision remains a key challenge in machine learning. In this paper, we propose a simple yet powerful generative model that learns such discrete representations. Our model, the Vector Quantised-Variational AutoEncoder (VQ-VAE), differs from VAEs in two key ways: the encoder network outputs discrete, rather than continuous, codes; and the prior is learnt rather than static. In order to learn a discrete latent representation, we incorporate ideas from vector quantisation (VQ). Using the VQ method allows the model to circumvent issues of \"posterior collapse\" -- where the latents are ignored when they are paired with a powerful autoregressive decoder -- typically observed in the VAE framework. Pairing these representations with an autoregressive prior, the model can generate high quality images, videos, and speech as well as doing high quality speaker conversion and unsupervised learning of phonemes, providing further evidence of the utility of the learnt representations.",
+            "notes": null
+          },
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 38,
+          "function_name": "main",
+          "code": "chameleon()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 282,
+          "function_name": "chameleon",
+          "code": "text(\"- Idea: map image to a discrete codebook, decode back to image and minimize reconstruction loss\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Idea: map image to a discrete codebook, decode back to image and minimize reconstruction loss",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 38,
+          "function_name": "main",
+          "code": "chameleon()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 283,
+          "function_name": "chameleon",
+          "code": "image(\"images/vq-vae.png\", width=600)"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "image",
+          "data": "images/vq-vae.png",
+          "style": {
+            "width": 600
+          },
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 38,
+          "function_name": "main",
+          "code": "chameleon()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 284,
+          "function_name": "chameleon",
+          "code": "text(\"- Encodes 512 x 512 image into 1024 tokens (codebook of size 8192)\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Encodes 512 x 512 image into 1024 tokens (codebook of size 8192)",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 38,
+          "function_name": "main",
+          "code": "chameleon()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 285,
+          "function_name": "chameleon",
+          "code": "text(\"- Train a new BPE tokenizer\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Train a new BPE tokenizer",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 38,
+          "function_name": "main",
+          "code": "chameleon()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 287,
+          "function_name": "chameleon",
+          "code": "text(\"Training:\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Training:",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 38,
+          "function_name": "main",
+          "code": "chameleon()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 288,
+          "function_name": "chameleon",
+          "code": "text(\"- Stage 1 (80%): large-scale, unsupervised (2.9T text tokens, 1.5T text/image tokens, 400B text/image interleaved tokens)\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Stage 1 (80%): large-scale, unsupervised (2.9T text tokens, 1.5T text/image tokens, 400B text/image interleaved tokens)",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 38,
+          "function_name": "main",
+          "code": "chameleon()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 289,
+          "function_name": "chameleon",
+          "code": "text(\"- Stage 2 (20%): 50% of stage 1 data, 50% of high quality data\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Stage 2 (20%): 50% of stage 1 data, 50% of high quality data",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 38,
+          "function_name": "main",
+          "code": "chameleon()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 291,
+          "function_name": "chameleon",
+          "code": "text(\"Training stability\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Training stability",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 38,
+          "function_name": "main",
+          "code": "chameleon()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 292,
+          "function_name": "chameleon",
+          "code": "text(\"- Text tokens have low entropy, image tokens have high entropy, leads to norm growth, logit drift problem\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Text tokens have low entropy, image tokens have high entropy, leads to norm growth, logit drift problem",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 38,
+          "function_name": "main",
+          "code": "chameleon()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 293,
+          "function_name": "chameleon",
+          "code": "text(\"- Fixes: QK norm, z-loss regularization\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Fixes: QK norm, z-loss regularization",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 38,
+          "function_name": "main",
+          "code": "chameleon()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 295,
+          "function_name": "chameleon",
+          "code": "text(\"Summary:\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Summary:",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 38,
+          "function_name": "main",
+          "code": "chameleon()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 296,
+          "function_name": "chameleon",
+          "code": "text(\"- Elegant (just autoregressive modeling of discrete tokens)\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Elegant (just autoregressive modeling of discrete tokens)",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 38,
+          "function_name": "main",
+          "code": "chameleon()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 297,
+          "function_name": "chameleon",
+          "code": "text(\"- Not as performant (discretization loses information - think OCR)\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Not as performant (discretization loses information - think OCR)",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 38,
+          "function_name": "main",
+          "code": "chameleon()"
+        },
+        {
+          "path": "lecture_17.py",
+          "line_number": 298,
+          "function_name": "chameleon",
+          "code": "text(\"- Training with multiple modalities is tricky\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Training with multiple modalities is tricky",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 38,
+          "function_name": "main",
+          "code": "chameleon()"
+        }
+      ],
+      "env": {},
+      "renderings": []
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 40,
+          "function_name": "main",
+          "code": "text(\"Summary:\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "Summary:",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 41,
+          "function_name": "main",
+          "code": "text(\"- Frontier models are expected to be multimodal (natively multimodal, omni)\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Frontier models are expected to be multimodal (natively multimodal, omni)",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 42,
+          "function_name": "main",
+          "code": "text(\"- Fundamental challenge: how to encode non-text modalities?\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Fundamental challenge: how to encode non-text modalities?",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 43,
+          "function_name": "main",
+          "code": "text(\"- Comprehension and generation might demand different things (semantics versus finer-grained details)\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Comprehension and generation might demand different things (semantics versus finer-grained details)",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 44,
+          "function_name": "main",
+          "code": "text(\"- Balance images + video (lower information density) and text for training stability\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Balance images + video (lower information density) and text for training stability",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    },
+    {
+      "stack": [
+        {
+          "path": "lecture_17.py",
+          "line_number": 45,
+          "function_name": "main",
+          "code": "text(\"- Continuous encoders + Transformer + diffusion models for generation\")"
+        }
+      ],
+      "env": {},
+      "renderings": [
+        {
+          "type": "markdown",
+          "data": "- Continuous encoders + Transformer + diffusion models for generation",
+          "style": {},
+          "external_link": null,
+          "internal_link": null
+        }
+      ]
+    }
+  ]
+}

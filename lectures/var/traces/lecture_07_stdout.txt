@@ -1,0 +1,77 @@
+✓ Initialized. View run at https://modal.com/apps/cs336-test/main/ap-kAtqOKTRAEYso9MGS9l2IH
+✓ Created objects.
+├── 🔨 Created mount /home/pliang/teaching/cs336/spring2026/lectures/modal_execute.py
+├── 🔨 Created mount /home/pliang/teaching/cs336/spring2026/lectures/edtrace/backend
+├── 🔨 Created mount /home/pliang/teaching/cs336/spring2026/lectures
+└── 🔨 Created function execute.
+Running edtrace.execute on Modal for: lecture_07
+
+==========
+== CUDA ==
+==========
+
+CUDA Version 13.2.0
+
+Container image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+
+This container image and its contents are governed by the NVIDIA Deep Learning Container License.
+By pulling and using the container, you accept the terms and conditions of this license:
+https://developer.nvidia.com/ngc/nvidia-deep-learning-container-license
+
+A copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.
+
+Downloading https://media.springernature.com/lw685/springer-static/image/art%3A10.1186%2Fs42774-021-00098-3/MediaObjects/42774_2021_98_Fig1_HTML.png?as=webp to var/files/image-b0641f11a73711b3078acbd257b0c805-https_media_springernature_com_lw685_springer-static_image_art_3A10_1186_2Fs42774-021-00098-3_MediaObjects_42774_2021_98_Fig1_HTML_png_as_webp
+Rank 3 [before all-reduce]: tensor([3., 4., 5., 6.], device='cuda:3')
+Rank 1 [before all-reduce]: tensor([1., 2., 3., 4.], device='cuda:1')
+Rank 2 [before all-reduce]: tensor([2., 3., 4., 5.], device='cuda:2')
+Rank 0 [before all-reduce]: tensor([0., 1., 2., 3.], device='cuda:0')
+Rank 0 [after all-reduce]: tensor([ 6., 10., 14., 18.], device='cuda:0')
+Rank 3 [after all-reduce]: tensor([ 6., 10., 14., 18.], device='cuda:3')
+Rank 1 [after all-reduce]: tensor([ 6., 10., 14., 18.], device='cuda:1')
+Rank 2 [after all-reduce]: tensor([ 6., 10., 14., 18.], device='cuda:2')
+Rank 0 [before reduce-scatter]: input = tensor([0., 1., 2., 3.], device='cuda:0'), output = tensor([0.], device='cuda:0')
+Rank 1 [before reduce-scatter]: input = tensor([1., 2., 3., 4.], device='cuda:1'), output = tensor([0.], device='cuda:1')
+Rank 2 [before reduce-scatter]: input = tensor([2., 3., 4., 5.], device='cuda:2'), output = tensor([0.], device='cuda:2')
+Rank 3 [before reduce-scatter]: input = tensor([3., 4., 5., 6.], device='cuda:3'), output = tensor([0.], device='cuda:3')
+Rank 0 [after reduce-scatter]: input = tensor([0., 1., 2., 3.], device='cuda:0'), output = tensor([6.], device='cuda:0')
+Rank 1 [after reduce-scatter]: input = tensor([1., 2., 3., 4.], device='cuda:1'), output = tensor([10.], device='cuda:1')
+Rank 3 [after reduce-scatter]: input = tensor([3., 4., 5., 6.], device='cuda:3'), output = tensor([18.], device='cuda:3')
+Rank 2 [after reduce-scatter]: input = tensor([2., 3., 4., 5.], device='cuda:2'), output = tensor([14.], device='cuda:2')
+Rank 0 [before all-gather]: input = tensor([6.], device='cuda:0'), output = tensor([ 0., 10., 14., 18.], device='cuda:0')
+Rank 2 [before all-gather]: input = tensor([14.], device='cuda:2'), output = tensor([2., 3., 4., 5.], device='cuda:2')
+Rank 1 [before all-gather]: input = tensor([10.], device='cuda:1'), output = tensor([1., 2., 3., 4.], device='cuda:1')
+Rank 3 [before all-gather]: input = tensor([18.], device='cuda:3'), output = tensor([3., 4., 5., 6.], device='cuda:3')
+Rank 0 [after all-gather]: input = tensor([6.], device='cuda:0'), output = tensor([ 6., 10., 14., 18.], device='cuda:0')
+Rank 2 [after all-gather]: input = tensor([14.], device='cuda:2'), output = tensor([ 6., 10., 14., 18.], device='cuda:2')
+Rank 1 [after all-gather]: input = tensor([10.], device='cuda:1'), output = tensor([ 6., 10., 14., 18.], device='cuda:1')
+Rank 3 [after all-gather]: input = tensor([18.], device='cuda:3'), output = tensor([ 6., 10., 14., 18.], device='cuda:3')
+[all_reduce] Rank 0: all_reduce(world_size=4, num_elements=104857600) took 1.60ms
+[all_reduce] Rank 2: all_reduce(world_size=4, num_elements=104857600) took 1.38ms
+[all_reduce] Rank 1: all_reduce(world_size=4, num_elements=104857600) took 1.50ms
+[all_reduce] Rank 3: all_reduce(world_size=4, num_elements=104857600) took 1.38ms
+[all_reduce] Rank 1: all_reduce measured bandwidth = 390 GB/s
+[all_reduce] Rank 2: all_reduce measured bandwidth = 426 GB/s
+[all_reduce] Rank 0: all_reduce measured bandwidth = 366 GB/s
+[all_reduce] Rank 3: all_reduce measured bandwidth = 425 GB/s
+[reduce_scatter] Rank 0: reduce_scatter(world_size=4, num_elements=104857600) took 2.61ms
+[reduce_scatter] Rank 1: reduce_scatter(world_size=4, num_elements=104857600) took 2.47ms
+[reduce_scatter] Rank 2: reduce_scatter(world_size=4, num_elements=104857600) took 2.39ms
+[reduce_scatter] Rank 3: reduce_scatter(world_size=4, num_elements=104857600) took 2.39ms
+[reduce_scatter] Rank 1: reduce_scatter measured bandwidth = 475 GB/s
+[reduce_scatter] Rank 0: reduce_scatter measured bandwidth = 450 GB/s
+[reduce_scatter] Rank 2: reduce_scatter measured bandwidth = 490 GB/s
+[reduce_scatter] Rank 3: reduce_scatter measured bandwidth = 490 GB/s
+[data_parallelism] Rank 2: step = 0, loss = 0.011991873383522034, params = ['1024x1024[-0.0299...]', '1024x1024[-0.0299...]', '1024x1024[-0.0279...]', '1024x1024[-0.0299...]']
+[data_parallelism] Rank 0: step = 0, loss = 0.01151061337441206, params = ['1024x1024[-0.0299...]', '1024x1024[-0.0299...]', '1024x1024[-0.0279...]', '1024x1024[-0.0299...]']
+[data_parallelism] Rank 3: step = 0, loss = 0.012755745090544224, params = ['1024x1024[-0.0299...]', '1024x1024[-0.0299...]', '1024x1024[-0.0279...]', '1024x1024[-0.0299...]']
+[data_parallelism] Rank 1: step = 0, loss = 0.012116298079490662, params = ['1024x1024[-0.0299...]', '1024x1024[-0.0299...]', '1024x1024[-0.0279...]', '1024x1024[-0.0299...]']
+[tensor_parallelism] Rank 0: forward pass produced activations 128x1024[4.0669...]
+[tensor_parallelism] Rank 1: forward pass produced activations 128x1024[4.0669...]
+[tensor_parallelism] Rank 2: forward pass produced activations 128x1024[4.0669...]
+[tensor_parallelism] Rank 3: forward pass produced activations 128x1024[4.0669...]
+[pipeline_parallelism] Rank 0: sending 32x1024[0.2459...] to rank 1
+[pipeline_parallelism] Rank 0: sending 32x1024[0.1663...] to rank 1
+[pipeline_parallelism] Rank 0: sending 32x1024[0.7809...] to rank 1
+[pipeline_parallelism] Rank 0: sending 32x1024[-0.1654...] to rank 1
+Stopping app - local entrypoint completed.
+✓ App completed. View run at https://modal.com/apps/cs336-test/main/ap-kAtqOKTRAEYso9MGS9l2IH

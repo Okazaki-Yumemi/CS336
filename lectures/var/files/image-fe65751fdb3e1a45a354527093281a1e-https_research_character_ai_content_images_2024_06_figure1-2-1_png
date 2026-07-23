@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Character.AI Blog</title>
+    <link rel="stylesheet" href="https://blog.character.ai/assets/built/screen.css?v=183a2c6783">
+
+    <script>
+        if (localStorage.getItem('alto_dark') == 'true') {
+            document.documentElement.classList.add('dark-mode');
+        }
+    </script>
+
+    <meta name="description" content="Character.AI empowers people to connect, learn, and tell stories through interactive entertainment.">
+    <link rel="icon" href="https://storage.ghost.io/c/ad/34/ad34888f-5b63-4d5f-a358-18cf16489b83/content/images/size/w256h256/2025/11/logo.png" type="image/png">
+    <link rel="canonical" href="https://blog.character.ai/">
+    <meta name="referrer" content="no-referrer-when-downgrade">
+    <link rel="next" href="https://blog.character.ai/page/2/">
+    
+    <meta property="og:site_name" content="Character.AI Blog">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Character.AI Blog">
+    <meta property="og:description" content="Character.AI empowers people to connect, learn, and tell stories through interactive entertainment.">
+    <meta property="og:url" content="https://blog.character.ai/">
+    <meta property="og:image" content="https://storage.ghost.io/c/ad/34/ad34888f-5b63-4d5f-a358-18cf16489b83/content/images/2025/11/xcardlogo-1.png">
+    <meta property="article:publisher" content="https://www.facebook.com/CharacterAI/">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Character.AI Blog">
+    <meta name="twitter:description" content="Character.AI empowers people to connect, learn, and tell stories through interactive entertainment.">
+    <meta name="twitter:url" content="https://blog.character.ai/">
+    <meta name="twitter:image" content="https://storage.ghost.io/c/ad/34/ad34888f-5b63-4d5f-a358-18cf16489b83/content/images/2025/11/xcardlogo.png">
+    <meta name="twitter:site" content="@character_ai">
+    <meta property="og:image:width" content="1024">
+    <meta property="og:image:height" content="512">
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "publisher": {
+        "@type": "Organization",
+        "name": "Character.AI Blog",
+        "url": "https://blog.character.ai/",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://storage.ghost.io/c/ad/34/ad34888f-5b63-4d5f-a358-18cf16489b83/content/images/2025/11/mainlogo_new-1.png"
+        }
+    },
+    "url": "https://blog.character.ai/",
+    "name": "Character.AI Blog",
+    "image": {
+        "@type": "ImageObject",
+        "url": "https://storage.ghost.io/c/ad/34/ad34888f-5b63-4d5f-a358-18cf16489b83/content/images/size/w1200/2025/11/themebanner.png",
+        "width": 1200,
+        "height": 482
+    },
+    "mainEntityOfPage": "https://blog.character.ai/",
+    "description": "Character.AI empowers people to connect, learn, and tell stories through interactive entertainment."
+}
+    </script>
+
+    <meta name="generator" content="Ghost 6.34">
+    <link rel="alternate" type="application/rss+xml" title="Character.AI Blog" href="https://blog.character.ai/rss/">
+    <script defer src="https://cdn.jsdelivr.net/ghost/portal@~2.68/umd/portal.min.js" data-i18n="true" data-ghost="https://blog.character.ai/" data-key="8a6cf943c6e0f72f4ba70fab9b" data-api="https://character-ai.ghost.io/ghost/api/content/" data-locale="en" crossorigin="anonymous"></script><style id="gh-members-styles">.gh-post-upgrade-cta-content,
+.gh-post-upgrade-cta {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    text-align: center;
+    width: 100%;
+    color: #ffffff;
+    font-size: 16px;
+}
+
+.gh-post-upgrade-cta-content {
+    border-radius: 8px;
+    padding: 40px 4vw;
+}
+
+.gh-post-upgrade-cta h2 {
+    color: #ffffff;
+    font-size: 28px;
+    letter-spacing: -0.2px;
+    margin: 0;
+    padding: 0;
+}
+
+.gh-post-upgrade-cta p {
+    margin: 20px 0 0;
+    padding: 0;
+}
+
+.gh-post-upgrade-cta small {
+    font-size: 16px;
+    letter-spacing: -0.2px;
+}
+
+.gh-post-upgrade-cta a {
+    color: #ffffff;
+    cursor: pointer;
+    font-weight: 500;
+    box-shadow: none;
+    text-decoration: underline;
+}
+
+.gh-post-upgrade-cta a:hover {
+    color: #ffffff;
+    opacity: 0.8;
+    box-shadow: none;
+    text-decoration: underline;
+}
+
+.gh-post-upgrade-cta a.gh-btn {
+    display: block;
+    background: #ffffff;
+    text-decoration: none;
+    margin: 28px 0 0;
+    padding: 8px 18px;
+    border-radius: 4px;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.gh-post-upgrade-cta a.gh-btn:hover {
+    opacity: 0.92;
+}</style>
+    <script defer src="https://cdn.jsdelivr.net/ghost/sodo-search@~1.8/umd/sodo-search.min.js" data-key="8a6cf943c6e0f72f4ba70fab9b" data-styles="https://cdn.jsdelivr.net/ghost/sodo-search@~1.8/umd/main.css" data-sodo-search="https://character-ai.ghost.io/" data-locale="en" crossorigin="anonymous"></script>
+    
+    <link href="https://blog.character.ai/webmentions/receive/" rel="webmention">
+    <script defer src="/public/cards.min.js?v=183a2c6783"></script>
+    <link rel="stylesheet" type="text/css" href="/public/cards.min.css?v=183a2c6783">
+    <script defer src="/public/member-attribution.min.js?v=183a2c6783"></script>
+    <script defer src="/public/ghost-stats.min.js?v=183a2c6783" data-stringify-payload="false" data-datasource="analytics_events" data-storage="localStorage" data-host="https://blog.character.ai/.ghost/analytics/api/v1/page_hit"  tb_site_uuid="ad34888f-5b63-4d5f-a358-18cf16489b83" tb_post_uuid="undefined" tb_post_type="null" tb_member_uuid="undefined" tb_member_status="undefined"></script><style>:root {--ghost-accent-color: #195EFF;}</style>
+    <style>
+    .gh-head-logo img {
+        max-height: 60px;
+    }
+    
+    .single-post .post-image {
+        display: none;
+	}
+    
+    .kg-blockquote-alt {
+        padding: 0 20px;
+        margin-top: 30px !important;
+    }
+    
+    .single-post .gh-content {
+        margin-top: 0;
+    }
+    
+    .gh-powered-by {
+        display: none;
+    }
+    strong {
+      font-weight: 600 !important;
+    }
+</style>
+<script>
+document.addEventListener('click', (e) => {
+  const a = e.target.closest('a');
+  if (!a) return;
+
+  const href = a.getAttribute('href') || '';
+  if (!href) return;
+
+  // skip obvious non-http things
+  if (href.startsWith('#') ||
+      href.startsWith('mailto:') ||
+      href.startsWith('tel:') ||
+      href.startsWith('javascript:')) {
+    return;
+  }
+
+  // parse url safely
+  let url;
+  try {
+    url = new URL(href, window.location.href);
+  } catch {
+    return; // malformed or weird — just bail
+  }
+
+  // allowlist of same-domain variants
+  const allowedHosts = new Set([
+    window.location.hostname,
+    'www.' + window.location.hostname,
+    // add any siblings/subdomains you actually treat as "internal"
+    // e.g. 'app.' + window.location.hostname,
+  ]);
+
+  const isInternal = allowedHosts.has(url.hostname);
+
+  if (!isInternal) {
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+  }
+});
+</script>
+</head>
+
+<body class="home-template">
+<div class="site">
+
+    <header id="gh-head" class="gh-head gh-outer">
+    <div class="gh-head-inner">
+
+        <div class="gh-head-brand">
+            <div class="gh-head-brand-wrapper">
+                <a class="gh-head-logo" href="https://blog.character.ai">
+                        <img src="https://storage.ghost.io/c/ad/34/ad34888f-5b63-4d5f-a358-18cf16489b83/content/images/2025/11/mainlogo_new-1.png" alt="Character.AI Blog">
+                </a>
+            </div>
+            <button class="gh-search gh-icon-btn" data-ghost-search><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" width="20" height="20"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg></button>
+            <button class="gh-burger"></button>
+        </div>
+
+        <nav class="gh-head-menu">
+            <ul class="nav">
+    <li class="nav-careers"><a href="https://character.ai/careers">careers</a></li>
+    <li class="nav-try-c-ai"><a href="https://character.ai">try c.ai</a></li>
+</ul>
+
+        </nav>
+
+        <div class="gh-head-actions">
+            <button class="gh-search gh-icon-btn" data-ghost-search><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" width="20" height="20"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg></button>
+            <!--<div class="toggle-track">
+                <div class="toggle-moon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="currentColor">
+    <path d="M13.333 2.667c-2.427 0-4.707 0.667-6.667 1.8 4 2.307 6.667 6.6 6.667 11.533s-2.667 9.227-6.667 11.533c1.96 1.133 4.24 1.8 6.667 1.8 7.36 0 13.333-5.973 13.333-13.333s-5.973-13.333-13.333-13.333z"></path>
+</svg></div>
+                <div class="toggle-sun"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="currentColor">
+    <path d="M4.733 24.72l1.88 1.88 2.4-2.387-1.893-1.893zM14.667 29.933c0.427 0 2.667 0 2.667 0v-3.933h-2.667zM16 7.333c-4.413 0-8 3.587-8 8s3.587 8 8 8c4.413 0 8-3.587 8-8 0-4.427-3.587-8-8-8zM26.667 16.667h4v-2.667h-4zM22.987 24.213l2.4 2.387 1.88-1.88-2.387-2.4zM27.267 5.947l-1.88-1.88-2.4 2.387 1.893 1.893zM17.333 0.733h-2.667v3.933h2.667zM5.333 14h-4v2.667h4zM9.013 6.453l-2.4-2.387-1.88 1.88 2.387 2.4 1.893-1.893z"></path>
+</svg></div>
+                <div class="toggle-thumb"></div>
+            </div>-->
+        </div>
+
+    </div>
+    </header>
+
+            
+    <div class="site-content">
+         <div class="content-area">
+    <main class="site-main">
+
+        <section class="gh-canvas blog-title">
+    <div class="blog-title-frame">
+        <h1>Blog</h1>
+    </div>
+</section>        <section class="category-nav gh-canvas">
+    <ul class="category-nav-list">
+        <li class="category-nav-item">
+            <a class="category-nav-link is-active" href="https://blog.character.ai">
+                All
+            </a>
+        </li>
+        <li class="category-nav-item">
+            <a class="category-nav-link "
+                href="/news/announcements/">
+                Announcements
+            </a>
+        </li>
+        <li class="category-nav-item">
+            <a class="category-nav-link "
+                href="/news/community/">
+                Community
+            </a>
+        </li>
+        <li class="category-nav-item">
+            <a class="category-nav-link "
+                href="/news/company/">
+                Company
+            </a>
+        </li>
+        <li class="category-nav-item">
+            <a class="category-nav-link "
+                href="/news/product/">
+                Product
+            </a>
+        </li>
+        <li class="category-nav-item">
+            <a class="category-nav-link "
+                href="/news/research/">
+                Research
+            </a>
+        </li>
+    </ul>
+</section>
+        <div class="post-feed">
+            <article class="post">
+
+    <figure class="post-media gh-canvas">
+        <div class="u-placeholder horizontal">
+            <a class="post-image-link" href="/characters-character-the-women-powering-character-ai/">
+                <img
+                    class="post-image u-object-fit"
+                    srcset="https://storage.ghost.io/c/ad/34/ad34888f-5b63-4d5f-a358-18cf16489b83/content/images/size/w400/2026/04/Blog-Header-Characters-at-Character_-Women-Powering-AI.jpg 400w,
+                            https://storage.ghost.io/c/ad/34/ad34888f-5b63-4d5f-a358-18cf16489b83/content/images/size/w750/2026/04/Blog-Header-Characters-at-Character_-Women-Powering-AI.jpg 750w,
+                            https://storage.ghost.io/c/ad/34/ad34888f-5b63-4d5f-a358-18cf16489b83/content/images/size/w960/2026/04/Blog-Header-Characters-at-Character_-Women-Powering-AI.jpg 960w,
+                            https://storage.ghost.io/c/ad/34/ad34888f-5b63-4d5f-a358-18cf16489b83/content/images/size/w1140/2026/04/Blog-Header-Characters-at-Character_-Women-Powering-AI.jpg 1140w,
+                            https://storage.ghost.io/c/ad/34/ad34888f-5b63-4d5f-a358-18cf16489b83/content/images/size/w1920/2026/04/Blog-Header-Characters-at-Character_-Women-Powering-AI.jpg 1920w"
+                    sizes="(min-width: 960px) 960px, 92vw"
+                    src="https://storage.ghost.io/c/ad/34/ad34888f-5b63-4d5f-a358-18cf16489b83/content/images/size/w960/2026/04/Blog-Header-Characters-at-Character_-Women-Powering-AI.jpg"
+                    alt="Characters @ Character: The Women Powering Character.AI"
+                    loading="lazy"
+                >
+            </a>
+        </div>
+    </figure>
+
+    <div class="gh-canvas">
+        <header class="post-header">
+            <h2 class="post-title">
+                <a class="post-title-link" href="/characters-character-the-women-powering-character-ai/">Characters @ Character: The Women Powering Character.AI</a>
+            </h2>
+            <div class="post-meta">
+                <span class="post-meta-item post-meta-date">
+                    <time datetime="2026-04-20">Apr 20, 2026</time>
+                </span>
+                    <span class="post-meta-item post-meta-length">5 min read</span>
+            </div>
+        </header>
+
+            <div class="post-excerpt">
+                At Character.AI, we believe that the best products are built by people with diverse perspectives and a shared passion for the future of AI.  Today, we’re celebrating the incredible women driving...
+            </div>
+            <!--<div class="post-excerpt">
+                <a class="post-title-link" href="/characters-character-the-women-powering-character-ai/">Continue reading »</a>
+            </div>-->
+    </div>
+
+</article>
+            <article class="post tag-announcements">
+
+    <figure class="post-media gh-canvas">
+        <div class="u-placeholder horizontal">
+            <a class="post-image-link" href="/cai-books/">
+                <img
+                    class="post-image u-object-fit"
+                    srcset="https://storage.ghost.io/c/ad/34/ad34888f-5b63-4d5f-a358-18cf16489b83/content/images/size/w400/2026/04/caiBooks_-Blog-Header.png 400w,
+                            https://storage.ghost.io/c/ad/34/ad34888f-5b63-4d5f-a358-18cf16489b83/content/images/size/w750/2026/04/caiBooks_-Blog-Header.png 750w,
+                            https://storage.ghost.io/c/ad/34/ad34888f-5b63-4d5f-a358-18cf16489b83/content/images/size/w960/2026/04/caiBooks_-Blog-Header.png 960w,
+                            https://storage.ghost.io/c/ad/34/ad34888f-5b63-4d5f-a358-18cf16489b83/content/images/size/w1140/2026/04/caiBooks_-Blog-Header.png 1140w,
+                            https://storage.ghost.io/c/ad/34/ad34888f-5b63-4d5f-a358-18cf16489b83/content/images/size/w1920/2026/04/caiBooks_-Blog-Header.png 1920w"
+                    sizes="(min-width: 960px) 960px, 92vw"
+                    src="https://storage.ghost.io/c/ad/34/ad34888f-5b63-4d5f-a358-18cf16489b83/content/images/size/w960/2026/04/caiBooks_-Blog-Header.png"
+                    alt="introducing c.ai books: classic literature, now playable"
+                    loading="lazy"
+                >
+            </a>
+        </div>
+    </figure>
+
+    <div class="gh-canvas">
+        <header class="post-header">
+            <h2 class="post-title">
+                <a class="post-title-link" href="/cai-books/">introducing c.ai books: classic literature, now playable</a>
+            </h2>
+            <div class="post-meta">
+                <span class="post-meta-item post-meta-date">
+                    <time datetime="2026-04-16">Apr 16, 2026</time>
+                </span>
+                    <span class="post-meta-item post-meta-length">3 min read</span>
+                    <span class="post-meta-item post-meta-tags"><a class="post-tag post-tag-announcements" href="/news/announcements/" title="Announcements">Announcements</a></span>
+            </div>
+        </header>
+
+            <div class="post-excerpt">
+                0:00
+
+/1:15
+
+
+1×
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+What if you could step inside a classic novel - not just read it, but play it?
+
+With c.ai Books, now you can. Pick a character, enter...
+            </div>
+            <!--<div class="post-excerpt">
+                <a class="post-title-link" href="/cai-books/">Continue reading »</a>
+            </div>-->
+    </div>
+
+</article>
+            <article class="post tag-company">
+
+    <figure class="post-media gh-canvas">
+        <div class="u-placeholder horizontal">
+            <a class="post-image-link" href="/pipsqueak2-and-more/">
+                <img
+                    class="post-image u-object-fit"
+                    srcset="https://storage.ghost.io/c/ad/34/ad34888f-5b63-4d5f-a358-18cf16489b83/content/images/size/w400/2026/04/Pipsqueak-2_-Model-Imp-Blog-Header.png 400w,
+                            https://storage.ghost.io/c/ad/34/ad34888f-5b63-4d5f-a358-18cf16489b83/content/images/size/w750/2026/04/Pipsqueak-2_-Model-Imp-Blog-Header.png 750w,
+                            https://storage.ghost.io/c/ad/34/ad34888f-5b63-4d5f-a358-18cf16489b83/content/images/size/w960/2026/04/Pipsqueak-2_-Model-Imp-Blog-Header.png 960w,
+                            https://storage.ghost.io/c/ad/34/ad34888f-5b63-4d5f-a358-18cf16489b83/content/images/size/w1140/2026/04/Pipsqueak-2_-Model-Imp-Blog-Header.png 1140w,
+                            https://storage.ghost.io/c/ad/34/ad34888f-5b63-4d5f-a358-18cf16489b83/content/images/size/w1920/2026/04/Pipsqueak-2_-Model-Imp-Blog-Header.png 1920w"
+                    sizes="(min-width: 960px) 960px, 92vw"
+                    src="https://storage.ghost.io/c/ad/34/ad34888f-5b63-4d5f-a358-18cf16489b83/content/images/size/w960/2026/04/Pipsqueak-2_-Model-Imp-Blog-Header.png"
+                    alt="April Update: New Model, Memory, and Lorebook"
+                    loading="lazy"
+                >
+            </a>
+        </div>
+    </figure>
+
+    <div class="gh-canvas">
+        <header class="post-header">
+            <h2 class="post-title">
+                <a class="post-title-link" href="/pipsqueak2-and-more/">April Update: New Model, Memory, and Lorebook</a>
+            </h2>
+            <div class="post-meta">
+                <span class="post-meta-item post-meta-date">
+                    <time datetime="2026-04-14">Apr 14, 2026</time>
+                </span>
+                    <span class="post-meta-item post-meta-length">4 min read</span>
+                    <span class="post-meta-item post-meta-tags"><a class="post-tag post-tag-company" href="/news/company/" title="Company">Company</a></span>
+            </div>
+        </header>
+
+            <div class="post-excerpt">
+                Today I want to share some big updates.
+
+Model improvements, Memory upgrades, and a feature our community has been asking for since long before I joined. All of this was shaped by community...
+            </div>
+            <!--<div class="post-excerpt">
+                <a class="post-title-link" href="/pipsqueak2-and-more/">Continue reading »</a>
+            </div>-->
+    </div>
+
+</article>
+            <article class="post tag-community">
+
+    <figure class="post-media gh-canvas">
+        <div class="u-placeholder horizontal">
+            <a class="post-image-link" href="/creator-spotlight-flowingbloom/">
+                <img
+                    class="post-image u-object-fit"
+                    srcset="https://storage.ghost.io/c/ad/34/ad34888f-5b63-4d5f-a358-18cf16489b83/content/images/size/w400/2026/04/flowingbloom.png 400w,
+                            https://storage.ghost.io/c/ad/34/ad34888f-5b63-4d5f-a358-18cf16489b83/content/images/size/w750/2026/04/flowingbloom.png 750w,
+                            https://storage.ghost.io/c/ad/34/ad34888f-5b63-4d5f-a358-18cf16489b83/content/images/size/w960/2026/04/flowingbloom.png 960w,
+                            https://storage.ghost.io/c/ad/34/ad34888f-5b63-4d5f-a358-18cf16489b83/content/images/size/w1140/2026/04/flowingbloom.png 1140w,
+                            https://storage.ghost.io/c/ad/34/ad34888f-5b63-4d5f-a358-18cf16489b83/content/images/size/w1920/2026/04/flowingbloom.png 1920w"
+                    sizes="(min-width: 960px) 960px, 92vw"
+                    src="https://storage.ghost.io/c/ad/34/ad34888f-5b63-4d5f-a358-18cf16489b83/content/images/size/w960/2026/04/flowingbloom.png"
+                    alt="Creator Spotlight: FlowingBloom"
+                    loading="lazy"
+                >
+            </a>
+        </div>
+    </figure>
+
+    <div class="gh-canvas">
+        <header class="post-header">
+            <h2 class="post-title">
+                <a class="post-title-link" href="/creator-spotlight-flowingbloom/">Creator Spotlight: FlowingBloom</a>
+            </h2>
+            <div class="post-meta">
+                <span class="post-meta-item post-meta-date">
+                    <time datetime="2026-04-09">Apr 9, 2026</time>
+                </span>
+                    <span class="post-meta-item post-meta-length">5 min read</span>
+                    <span class="post-meta-item post-meta-tags"><a class="post-tag post-tag-community" href="/news/community/" title="Community">Community</a></span>
+            </div>
+        </header>
+
+            <div class="post-excerpt">
+                For our latest Character’s Corner series, we spoke to FlowingBloom, who is a NICU nurse by day who uses Character.ai as a way to tap into her creativity and get immediate...
+            </div>
+            <!--<div class="post-excerpt">
+                <a class="post-title-link" href="/creator-spotlight-flowingbloom/">Continue reading »</a>
+            </div>-->
+    </div>
+
+</article>
+            <article class="post tag-announcements tag-product">
+
+    <figure class="post-media gh-canvas">
+        <div class="u-placeholder horizontal">
+            <a class="post-image-link" href="/imagine-gallery/">
+                <img
+                    class="post-image u-object-fit"
+                    srcset="https://storage.ghost.io/c/ad/34/ad34888f-5b63-4d5f-a358-18cf16489b83/content/images/size/w400/2026/03/Blog-Header_-Imagine-Gallery.png 400w,
+                            https://storage.ghost.io/c/ad/34/ad34888f-5b63-4d5f-a358-18cf16489b83/content/images/size/w750/2026/03/Blog-Header_-Imagine-Gallery.png 750w,
+                            https://storage.ghost.io/c/ad/34/ad34888f-5b63-4d5f-a358-18cf16489b83/content/images/size/w960/2026/03/Blog-Header_-Imagine-Gallery.png 960w,
+                            https://storage.ghost.io/c/ad/34/ad34888f-5b63-4d5f-a358-18cf16489b83/content/images/size/w1140/2026/03/Blog-Header_-Imagine-Gallery.png 1140w,
+                            https://storage.ghost.io/c/ad/34/ad34888f-5b63-4d5f-a358-18cf16489b83/content/images/size/w1920/2026/03/Blog-Header_-Imagine-Gallery.png 1920w"
+                    sizes="(min-width: 960px) 960px, 92vw"
+                    src="https://storage.ghost.io/c/ad/34/ad34888f-5b63-4d5f-a358-18cf16489b83/content/images/size/w960/2026/03/Blog-Header_-Imagine-Gallery.png"
+                    alt="Introducing Imagine Gallery"
+                    loading="lazy"
+                >
+            </a>
+        </div>
+    </figure>
+
+    <div class="gh-canvas">
+        <header class="post-header">
+            <h2 class="post-title">
+                <a class="post-title-link" href="/imagine-gallery/">Introducing Imagine Gallery</a>
+            </h2>
+            <div class="post-meta">
+                <span class="post-meta-item post-meta-date">
+                    <time datetime="2026-03-18">Mar 18, 2026</time>
+                </span>
+                    <span class="post-meta-item post-meta-length">2 min read</span>
+                    <span class="post-meta-item post-meta-tags"><a class="post-tag post-tag-announcements" href="/news/announcements/" title="Announcements">Announcements</a></span>
+            </div>
+        </header>
+
+            <div class="post-excerpt">
+                Character.ai’s Imagine feature turns conversations into visuals - dramatic scenes, surreal worlds, unexpected moments. It’s one of the most creative ways to build upon your chat on Character.ai.
+
+Now,...
+            </div>
+            <!--<div class="post-excerpt">
+                <a class="post-title-link" href="/imagine-gallery/">Continue reading »</a>
+            </div>-->
+    </div>
+
+</article>
+        </div>
+
+        <div class="gh-outer">
+<nav class="pagination">
+
+    <div class="pagination-left">
+    </div>
+
+        <span class="page-number hidden-xs hidden-sm">Page 1 of 13</span>
+
+    <div class="pagination-right">
+            <a href="/page/2/">Next <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor">
+    <path d="M5.333 14.667v2.667h16l-7.333 7.333 1.893 1.893 10.56-10.56-10.56-10.56-1.893 1.893 7.333 7.333h-16z"></path>
+</svg></a>
+    </div>
+
+</nav>
+</div>
+
+    </main>
+    </div>
+    </div>
+
+    <footer class="gh-foot gh-outer">
+        <div class="gh-foot-inner gh-inner">
+            <div class="gh-copyright">
+                Character.AI Blog © 2026
+            </div>
+            <nav class="gh-foot-menu">
+                
+            </nav>
+            <div class="gh-powered-by">
+                <a href="https://ghost.org/" target="_blank" rel="noopener">Powered by Ghost</a>
+            </div>
+        </div>
+    </footer>
+
+</div>
+
+
+<script
+    src="https://code.jquery.com/jquery-3.5.1.min.js"
+    integrity="sha256-9/aliU8dGd2tb6OSsuzixeV4y/faTqgFtohetphbbj0="
+    crossorigin="anonymous">
+</script>
+<script src="https://blog.character.ai/assets/built/main.min.js?v=183a2c6783"></script>
+
+
+
+</body>
+</html>
