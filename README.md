@@ -35,7 +35,7 @@ CS336-2026/
 - [x] BPE training correctness tests
 - [x] BPE special-token tests
 - [x] BPE training speed test
-- [ ] Tokenizer implementation
+- [x] Tokenizer implementation
 - [ ] Transformer components
 - [ ] Language-model training
 - [ ] Profiling and benchmarking
