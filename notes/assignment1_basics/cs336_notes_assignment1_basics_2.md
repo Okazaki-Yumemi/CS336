@@ -159,3 +159,16 @@ channels_last_transformed = einx.dot(
 
 `cs336_codeNote3_linearModule.md`
 
+
+
+### 3.3.3 Embedding Module
+
+Transformer的第一层是一个embedding layer. 把 integer token IDs 映射到 d_model 维度的向量
+
+我们要写一个Embedding class, 继承nn.Embedding module
+
+forward method要select the embedding vector for each token ID by indexing into an embedding matrix of shape (vocab_size , d_model) using a torch.LongTensor of token IDs with shape (batch_size , sequence_length)
+
+开始写代码咯，写Embedding module. 见代码笔记.
+
+`cs336_codeNote4_embedding.md`
