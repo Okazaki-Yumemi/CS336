@@ -172,3 +172,34 @@ forward method要select the embedding vector for each token ID by indexing into 
 开始写代码咯，写Embedding module. 见代码笔记.
 
 `cs336_codeNote4_embedding.md`
+
+
+## 3.4 Pre-Norm Transformer Block
+
+Each Transformer block has two sub-layers: a multi-head self-attention mechanism and a position-wise feed-forward network
+
+人们发现Pre Norm强多了
+
+### 3.4.1 Root Mean Square Layer Normalization (RMSNorm)
+
+You should upcast your input to torch.float32 to prevent overflow when you square the input. Overall, 
+your forward method should look like:
+
+```py
+
+in_dtype = x.dtype
+
+x = x.to(torch.float32)
+
+# your code here performing RMSNorm
+
+...
+result = ...
+
+return result.to(in_dtype)
+
+```
+
+开始写代码咯，写RMSNorm module. 见代码笔记.
+
+`cs336_codeNote5_RMSnorm.md`

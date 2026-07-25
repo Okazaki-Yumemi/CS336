@@ -126,4 +126,3 @@ collected 48 items / 47 deselected / 1 selected
 tests/test_model.py::test_embedding PASSED
 
 == 1 passed, 47 deselected in 0.12s ==
-```
