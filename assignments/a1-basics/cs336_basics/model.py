@@ -44,4 +44,38 @@ class Linear(nn.Module):
         output = einsum(x, self.weight, "... d_in , d_out d_in -> ... d_out")
         return output
         
+class Embedding(nn.Module):
+    def __init__(
+        self,
+        num_embeddings : int,
+        embedding_dim : int,
+        device: torch.device | None = None,
+        dtype : torch.dtype | None = None
+    ):
+        super().__init__()
+        self.num_embeddings = num_embeddings
+        self.embedding_dim = embedding_dim
+        self.device = device
+        self.dtype = dtype
+        
+        self.weight = nn.Parameter(
+            torch.empty(
+                self.num_embeddings ,
+                self.embedding_dim,
+                device= self.device,
+                dtype= self.dtype
+                )
+            )
+        nn.init.trunc_normal_(
+            self.weight,
+            std= 1,
+            a = -3,
+            b = 3,
+        )
+    
+    def forward(
+        self,
+        token_ids:torch.Tensor
+    ) -> torch.Tensor:
+        return self.weight[token_ids]
         
