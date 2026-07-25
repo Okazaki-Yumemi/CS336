@@ -1,4 +1,5 @@
 import math
+from typing import Any
 
 import torch
 from einops import einsum
@@ -79,3 +80,41 @@ class Embedding(nn.Module):
     ) -> torch.Tensor:
         return self.weight[token_ids]
         
+        
+class RMSNorm(nn.Module):
+    def __init__(
+        self,
+        d_model:int,
+        eps:float = 1e-5,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
+    ):
+        super().__init__()
+        
+        self.d_model = d_model
+        self.eps = eps
+        
+        self.weight = nn.Parameter(
+            torch.ones(
+                self.d_model,
+                device= device,
+                dtype=  dtype,
+            )
+        )
+        
+    def forward(
+        self,
+        x: torch.Tensor
+    ) -> torch.Tensor:
+        in_dtype = x.dtype
+        
+        x_float = x.to(torch.float32)
+        
+        mean_square = torch.mean(x_float ** 2, dim=-1, keepdim=True)
+        
+        inverse_rms = torch.rsqrt(mean_square + self.eps)
+        
+        normalized_x = x_float * inverse_rms
+        
+        x_original = normalized_x.to(in_dtype)
+        return x_original * self.weight
