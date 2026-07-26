@@ -351,3 +351,55 @@ class TransformerBlock(nn.Module):
         x = x + self.swiGLU(self.rmsnorm2(x))
         
         return x
+    
+class TransformerLM(nn.Module):
+    def __init__(
+        self,
+        d_model: int,
+        num_heads: int,
+        d_ff: int,
+        max_seq_len: int,
+        theta: float,
+        vocab_size: int,
+        num_layers: int,
+        context_length: int,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None
+    ):
+        super().__init__()
+        
+        self.d_model = d_model
+        self.num_heads = num_heads
+        self.d_ff = d_ff
+        self.max_seq_len = max_seq_len
+        self.theta = theta
+        self.vocab_size = vocab_size
+        self.num_layers = num_layers
+        self.context_length = context_length
+        
+        self.token_embedding = Embedding(vocab_size, d_model, device, dtype)
+        
+        self.transformer_blocks = nn.ModuleList([
+            TransformerBlock(d_model, num_heads, d_ff, max_seq_len, theta, device, dtype)
+            for _ in range(num_layers)
+        ])
+        
+        self.rmsnorm_final = RMSNorm(d_model)
+        
+        self.output_projection = Linear(d_model, vocab_size, device, dtype)
+        
+    def forward(
+        self,
+        x: torch.Tensor,
+        token_positions: torch.Tensor | None = None
+    )-> torch.Tensor:
+        
+        x =  self.token_embedding(x)
+        
+        for block in self.transformer_blocks:
+            x = block(x, token_positions)
+        
+        x = self.rmsnorm_final(x)
+        x = self.output_projection(x)
+
+        return x
