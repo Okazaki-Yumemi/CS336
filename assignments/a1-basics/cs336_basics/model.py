@@ -2,7 +2,7 @@ import math
 from typing import Any
 
 import torch
-from einops import einsum
+from einops import einsum, rearrange
 from torch import nn
 
 class Linear(nn.Module):
@@ -234,3 +234,81 @@ def scaled_dot_product_attention(
     )
     
     return attention_output
+
+class MultiHeadSelfAttention(nn.Module):
+    def __init__(
+        self,
+        d_model: int,
+        num_heads: int,
+        theta: float | None = None,
+        max_seq_len: int | None = None,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None
+    ):
+        super().__init__()
+        
+        assert d_model % num_heads == 0, "d_model must be divisible by num_heads"
+        
+        self.d_model = d_model
+        self.num_heads = num_heads
+        self.head_dim = d_model // num_heads
+        
+        self.q_proj = Linear(d_model, d_model, device, dtype)
+        self.k_proj = Linear(d_model, d_model, device, dtype)
+        self.v_proj = Linear(d_model, d_model, device, dtype)
+        self.o_proj = Linear(d_model, d_model, device, dtype)
+        
+        if theta is not None and max_seq_len is not None:
+            self.rope = RoPE(theta, self.head_dim, max_seq_len, device)
+        else:
+            self.rope = None
+            
+    def forward(
+        self,
+        x: torch.Tensor,
+        token_positions: torch.Tensor | None = None,
+    ):
+        seq_len = x.shape[-2]
+        Q = self.q_proj(x)
+        K = self.k_proj(x)
+        V = self.v_proj(x)
+        
+        Q = rearrange(
+            Q,
+            "... seq (heads head_dim) -> ... heads seq head_dim",
+            heads=self.num_heads,
+        )
+        K = rearrange(
+            K,
+            "... seq (heads head_dim) -> ... heads seq head_dim",
+            heads=self.num_heads,
+        )
+        V = rearrange(
+            V,
+            "... seq (heads head_dim) -> ... heads seq head_dim",
+            heads=self.num_heads,
+        )
+        # 位置编码
+        if self.rope is not None:           
+            #token_positions 需要手动加head维度
+            if token_positions is not None:
+                token_positions = token_positions.unsqueeze(-2)
+            else:
+                token_positions = torch.arange(seq_len, device=Q.device)
+            Q = self.rope(Q, token_positions)
+            K = self.rope(K, token_positions)
+        # causal mask
+        
+        mask = torch.tril(
+            torch.ones(seq_len, seq_len, device=x.device, dtype=torch.bool)
+        )
+        
+        scaled_attention_output = scaled_dot_product_attention(Q, K, V, mask)
+        
+        scaled_attention_output = rearrange(
+            scaled_attention_output,
+            "... heads seq head_dim -> ... seq (heads head_dim)",
+            heads=self.num_heads,
+        )
+        
+        return self.o_proj(scaled_attention_output)
