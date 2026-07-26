@@ -198,3 +198,18 @@ class RoPE(nn.Module):
         
         return x_rotated
         
+class Softmax(nn.Module):
+    def __init__(self,):
+        super().__init__()
+    
+    def forward(
+        self,
+        x: torch.Tensor,
+        i: int
+    ):
+        max_value = x.max(dim = i , keepdim=True).values
+        
+        x_exp = torch.exp(x-max_value)
+        partition = x_exp.sum(i, keepdim= True)
+        
+        return x_exp/partition
