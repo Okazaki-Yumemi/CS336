@@ -278,3 +278,12 @@ MultiHeadSelfAttention(x) = WoMultiHead(W_q X, W_k X, W_v X)
 完整的Pre-Norm Transformer block
 
 见`cs336_codeNote11_transformerBlock.md`
+
+
+# 3.6  Transformer LM
+
+Time to put it all together!
+
+直接写代码去!
+
+见 `cs336_codeNote12_transformerLM.md`
