@@ -216,3 +216,12 @@ FFN(x) = SwiGLU(x,W1,W2,W3) = W2(SiLU(W1x) * W3x)
 
 写代码了，见
 `cs336_codeNote6_SwiGLU.md`
+
+### 3.4.3 Relative Positional Embeddings
+
+RoPE是位置编码，每个小矩阵是 cos/sin的旋转矩阵，旋转角度是相对位置编码
+
+然后一整个大的R矩阵就是对交线是 2x2 的小矩阵的block diagonal matrix，别的都是0
+
+代码见
+`cs336_codeNote7_RoPE.md`
