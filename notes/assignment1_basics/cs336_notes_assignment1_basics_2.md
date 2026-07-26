@@ -238,3 +238,18 @@ softmax(x)_i = exp(x_i) / sum_j exp(x_j)
 
 代码见
 `cs336_codeNote8_softmax.md`
+
+
+
+现在,我们可以开始写attention了
+
+$$ Attention(Q,K,V) = softmax(QK^T / sqrt(d_k)) V $$
+
+Q 属于 nxd_k, K 属于 mx d_k, V 属于 mx d_v
+
+**masking** 
+
+
+``scaled dot-product attention``
+
+见 `cs336_codeNote9_scaledDotProductAttention.md`

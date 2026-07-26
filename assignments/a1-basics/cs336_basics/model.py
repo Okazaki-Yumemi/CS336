@@ -223,7 +223,7 @@ def scaled_dot_product_attention(
     scaled_scores = scores / math.sqrt(d_k)
     
     if mask is not None:
-        scaled_scores = scaled_scores.masked_fill(mask == 0, float('-inf'))
+        scaled_scores = scaled_scores.masked_fill(~mask, float('-inf'))
     
     softmax_scores = softmax(scaled_scores, -1)
     
