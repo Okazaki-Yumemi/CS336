@@ -225,3 +225,16 @@ RoPE是位置编码，每个小矩阵是 cos/sin的旋转矩阵，旋转角度�
 
 代码见
 `cs336_codeNote7_RoPE.md`
+
+### 3.4.4 Scaled Dot-Product Attention
+
+As a preliminary step, the definition of the Attention operation will make use of softmax,an operation that takes an unnormalized vector of scores and turns it into normalized distribution.
+
+softmax is defined as follows:
+
+```
+softmax(x)_i = exp(x_i) / sum_j exp(x_j)
+```
+
+代码见
+`cs336_codeNote8_softmax.md`
