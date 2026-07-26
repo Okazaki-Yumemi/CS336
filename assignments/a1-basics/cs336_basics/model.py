@@ -322,6 +322,8 @@ class TransformerBlock(nn.Module):
         d_ff: int,
         max_seq_len: int,
         theta: float,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None
     ):
         super().__init__()
         
@@ -342,6 +344,7 @@ class TransformerBlock(nn.Module):
     def forward(
         self,
         x: torch.Tensor,
+        token_positions: torch.Tensor | None = None
     )-> torch.Tensor:
         
         x = x + self.attention(self.rmsnorm1(x))
