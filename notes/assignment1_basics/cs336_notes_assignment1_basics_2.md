@@ -253,3 +253,21 @@ Q 属于 nxd_k, K 属于 mx d_k, V 属于 mx d_v
 ``scaled dot-product attention``
 
 见 `cs336_codeNote9_scaledDotProductAttention.md`
+
+## 3.4.5 Casual Multi-head self attention
+
+多头注意力
+
+Multi-head(Q,K,V) = Concat(head_1,...,head_h) W^O
+
+where head_i = Attention(QW_i^Q, KW_i^K, VW_i^V)
+
+MultiHeadSelfAttention(x) = WoMultiHead(W_q X, W_k X, W_v X)
+
+
+**casual masking**
+
+**Applying RoPE to Q and K**
+
+见
+`cs336_codeNote10_multiheadSelfAttention.md`
