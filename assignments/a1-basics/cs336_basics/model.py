@@ -148,3 +148,53 @@ class SwiGLU(nn.Module):
         y = self.w2(h)
         
         return y
+    
+class RoPE(nn.Module):
+    def __init__(
+        self,
+        theta: float,
+        d_k :int,
+        max_seq_len: int,
+        device: torch.device | None = None,
+    ):
+        super().__init__()
+        
+        assert d_k % 2 == 0, "d_k must be even for RoPE"
+        
+        mid_list = torch.arange(0, d_k , 2 , device=device,dtype=torch.float32)
+        exponents = mid_list / (d_k)
+        
+        inv_freq = torch.pow(theta, -exponents)
+        
+        positional_indices = torch.arange(max_seq_len, 
+                                          device=device,
+                                          dtype=torch.float32,
+                                          )[:, None]
+        
+        angles = positional_indices * inv_freq
+        
+        cos_cache = torch.cos(angles)
+        sin_cache = torch.sin(angles)
+        
+        self.register_buffer("cos_cache", cos_cache, persistent=False)
+        self.register_buffer("sin_cache", sin_cache, persistent=False)
+        self.cos_cache: torch.Tensor
+        self.sin_cache: torch.Tensor
+        
+    def forward(
+        self,
+        x: torch.Tensor,
+        token_positions: torch.Tensor
+    ) -> torch.Tensor:
+        #查找对应位置的cos和sin值
+        cos = self.cos_cache[token_positions]
+        sin = self.sin_cache[token_positions]
+        #将x拆分为偶数和奇数索引的部分
+        x1, x2 = x[..., ::2], x[..., 1::2]
+        
+        # 二维旋转，交错拼回
+        x_rotated = torch.stack([x1 * cos - x2 * sin, x1 * sin + x2 * cos], dim=-1)
+        x_rotated = x_rotated.flatten(-2)
+        
+        return x_rotated
+        
