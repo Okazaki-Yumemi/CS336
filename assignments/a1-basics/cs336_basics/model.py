@@ -198,18 +198,39 @@ class RoPE(nn.Module):
         
         return x_rotated
         
-class Softmax(nn.Module):
-    def __init__(self,):
-        super().__init__()
     
-    def forward(
-        self,
-        x: torch.Tensor,
-        i: int
-    ):
-        max_value = x.max(dim = i , keepdim=True).values
+def softmax(
+    x: torch.Tensor,
+    i: int
+):
+    max_value = x.max(dim = i , keepdim=True).values
         
-        x_exp = torch.exp(x-max_value)
-        partition = x_exp.sum(i, keepdim= True)
+    x_exp = torch.exp(x-max_value)
+    partition = x_exp.sum(i, keepdim= True)
         
-        return x_exp/partition
+    return x_exp/partition
+    
+def scaled_dot_product_attention(
+    q: torch.Tensor,
+    k: torch.Tensor,
+    v: torch.Tensor,
+    mask: torch.Tensor | None = None
+)-> torch.Tensor:
+    
+    scores = einsum(q, k, "... query d_k , ... key d_k -> ... query key")
+    d_k = q.shape[-1]
+    
+    scaled_scores = scores / math.sqrt(d_k)
+    
+    if mask is not None:
+        scaled_scores = scaled_scores.masked_fill(mask == 0, float('-inf'))
+    
+    softmax_scores = softmax(scaled_scores, -1)
+    
+    attention_output = einsum(
+        softmax_scores,
+        v,
+        "... query key , ... key d_v -> ... query d_v"
+    )
+    
+    return attention_output
