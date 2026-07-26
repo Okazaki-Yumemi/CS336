@@ -203,3 +203,16 @@ return result.to(in_dtype)
 开始写代码咯，写RMSNorm module. 见代码笔记.
 
 `cs336_codeNote5_RMSnorm.md`
+
+### 3.4.2 position-wise Feed-Forward Network (FFN)
+
+- 第一个点是我们已经不用ReLU了，而是用SwiGLU了
+
+Putting the SiLU/Swish and GLU together, we get SwiGLU. The formula is:
+
+```
+FFN(x) = SwiGLU(x,W1,W2,W3) = W2(SiLU(W1x) * W3x)
+```
+
+写代码了，见
+`cs336_codeNote6_SwiGLU.md`
