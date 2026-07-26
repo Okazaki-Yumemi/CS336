@@ -79,8 +79,7 @@ class Embedding(nn.Module):
         token_ids:torch.Tensor
     ) -> torch.Tensor:
         return self.weight[token_ids]
-        
-        
+             
 class RMSNorm(nn.Module):
     def __init__(
         self,
@@ -197,8 +196,7 @@ class RoPE(nn.Module):
         x_rotated = x_rotated.flatten(-2)
         
         return x_rotated
-        
-    
+           
 def softmax(
     x: torch.Tensor,
     i: int
@@ -312,8 +310,7 @@ class MultiHeadSelfAttention(nn.Module):
         )
         
         return self.o_proj(scaled_attention_output)
-    
-    
+     
 class TransformerBlock(nn.Module):
     def __init__(
         self,
