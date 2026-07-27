@@ -400,3 +400,23 @@ class TransformerLM(nn.Module):
         x = self.output_projection(x)
 
         return x
+
+def cross_entropy_loss(
+    logits: torch.Tensor,
+    targets: torch.Tensor,
+)-> torch.Tensor:
+    # logits shape: (batch_size, seq_len, vocab_size)
+    # targets shape: (batch_size, seq_len)
+    
+    # Step 1: Subtract the max for numerical stability
+    max_logits = logits.max(dim=-1, keepdim=True).values
+    stable_logits = logits - max_logits
+    
+    log_partition = torch.logsumexp(stable_logits, dim=-1)
+    
+    target_logits = torch.gather(stable_logits, dim=-1, index=targets.unsqueeze(-1)).squeeze(-1)
+   
+    loss_per_item = log_partition - target_logits
+   
+   
+    return loss_per_item.mean()
