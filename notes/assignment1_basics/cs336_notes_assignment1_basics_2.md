@@ -280,10 +280,111 @@ MultiHeadSelfAttention(x) = WoMultiHead(W_q X, W_k X, W_v X)
 见`cs336_codeNote11_transformerBlock.md`
 
 
-# 3.6  Transformer LM
+### Transformer LM
 
 Time to put it all together!
 
 直接写代码去!
 
 见 `cs336_codeNote12_transformerLM.md`
+
+### Resource accounting
+
+我们用的方式就是最简单的统计计算，例如给定
+
+mxn 矩阵 A 和 nxp 矩阵 B ， 那么我们统计的计算量 计算 AB 就是 2mnp FLOPS (一半是乘法，一半是加法)
+
+1. 参数量 accounting: 模型里有多少个可训练标量
+2. FLOPs accounting: 一次前向做了多少运算
+
+**参数怎么数**:
+
+**Token embedding**: (vocab_size , d_model)
+参数量 = vocab_size * d_model
+
+**Transformer block 的 attention**: 写了四个linear
+(Q projection D->D)
+(K projection D->D)
+(V projection D->D)
+(O projection D->D)
+
+
+每个矩阵都是 (D,D) -> attention 参数量 4 * D * D = 4D^2
+
+**每个Block 的SwiGLU**: 
+
+W_1 (F,D) , W_2 (F,D) , W_3 (D,F) -> 3FD
+
+**每个 BLOCK 的 RMSNorm**: 
+
+rmsnorm1.weight: (D,) -> D
+rmsnorm2.weight: (D,) -> D
+
+2D
+
+**每个Block 总参数量**: 4D^2 + 3DF + 2D 
+
+有L层: P = L(4D^2 + 3DF + 2D)   
+
+**模型头尾参数**:
+- Token embedding: VD
+- Final RMSNorm: D
+- LM head: VD
+
+
+**Problem**: 计算Transformer resource accounting
+
+(a) 
+- vocab_size = 50257,
+- context_length = 1024
+- num_layers = 48
+- d_model = 1600
+- num_heads = 25
+- d_ff = 4288
+
+那么计算如下
+
+P_embedding = 2VD = 2 * 50257 * 1600 = 160822400
+Pone block​=10,240,000+20,582,400+3,200=30,825,600​
+Pall blocks​=48×30,825,600=1,479,628,800​
+P_final_rmsnorm = D = 1600
+
+P_total = P_embedding + P_all_blocks + P_final_rmsnorm = 1,640,452,800
+
+1.64B
+
+memory = 1.64B * 4 bytes = 6.56GB = 6.11 GiB
+
+(b) Identify the matrix multiplies required to complete a forward pass of our GPT-2 XL-shaped model
+
+1. Q K V O 投影
+
+2*TD^2 * 4 = 20,971,520,000
+
+20.97 GFLOPs
+
+2. Attention的两次乘法
+
+8TD^2 + 4T^2D = 27,682,406,400
+
+3. SwiGLU的3次乘法
+
+6TDF = 42,152,755,200
+
+4. 一个Transformer block
+
+68.84 GFLOPs
+
+5. 48个Transformer block
+
+3.352 TFLOPs
+
+6. LM head
+
+2TDV = 164,682,137,600
+
+164.68 GFLOPs
+
+**总的为 3.52 TFLOPs per forward pass**
+
+
