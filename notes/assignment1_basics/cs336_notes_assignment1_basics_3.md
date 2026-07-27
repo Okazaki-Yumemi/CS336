@@ -248,3 +248,38 @@ Fadamw = 14P
 H100 理论 495 TLOPS/s, 50% MFU
 
 对应 4850 hours, 即为 202days
+
+## 4.4 Learning rate scheduling
+
+实现一个函数，输入当前训练步数 t，输出这一刻AdamW的学习率
+
+学习率分为3个阶段
+
+- Warmup: if t < T_w then lr = t / T_w * lr_max
+- Cosine annealing: if T_w <= t < T_c 
+
+then lr = lr_min + 0.5 *( 1 + cos(pi * (t - T_w) / (T_c - T_w))) * (lr_max - lr_min)
+
+- Post-annealing: if t >= T_c then lr = lr_min
+
+这个就不写codenote了
+
+```py
+def cosine_lr_schedule(
+    it:int,
+    max_learning_rate: float,
+    min_learning_rate: float,
+    warmup_steps: int,
+    cosine_cycle_iters:int,
+)-> float:
+    
+    if it < warmup_steps:
+        return max_learning_rate * (it / warmup_steps)
+    
+    if it >= warmup_steps and it < cosine_cycle_iters:
+        return min_learning_rate + 0.5 * (max_learning_rate - min_learning_rate) * (1 + math.cos(math.pi * (it - warmup_steps) / (cosine_cycle_iters - warmup_steps)))
+    
+    return min_learning_rate
+
+```
+翻译一下逻辑就行
