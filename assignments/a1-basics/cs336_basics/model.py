@@ -420,3 +420,75 @@ def cross_entropy_loss(
    
    
     return loss_per_item.mean()
+
+class AdamW(torch.optim.Optimizer):
+    def __init__(
+        self,
+        params: Any,
+        lr: float = 1e-3,
+        betas: tuple[float, float] = (0.9, 0.999),
+        eps: float = 1e-8,
+        weight_decay: float = 0.01,
+    ):
+        defaults = {
+            "lr": lr,
+            "betas": betas,
+            "eps": eps,
+            "weight_decay": weight_decay,
+        }
+        
+        super().__init__(params, defaults)
+    
+    @torch.no_grad()
+    def step(self, closure=None):
+        loss = None
+        if closure is not None:
+            with torch.enable_grad():
+                loss = closure()
+                
+        for group in self.param_groups:
+            for p in group["params"]:
+                if p.grad is None:
+                    continue
+                
+                grad = p.grad
+                if grad.is_sparse:
+                    raise RuntimeError("AdamW does not support sparse gradients")
+                
+                state = self.state[p]
+                
+                if len(state) == 0:
+                    state["step"] = 0
+                    state["exp_avg"] = torch.zeros_like(p)
+                    state["exp_avg_sq"] = torch.zeros_like(p)
+                    
+                exp_avg, exp_avg_sq = state["exp_avg"], state["exp_avg_sq"]
+                beta1, beta2 = group["betas"]
+                
+                state["step"] += 1
+                step = state["step"]
+                
+                lr = group["lr"]
+                eps = group["eps"]
+                weight_decay = group["weight_decay"]
+                
+                adjusted_lr = (
+                    lr
+                    * math.sqrt(1 - beta2 ** step)
+                    / (1 - beta1 ** step)
+                )
+                
+                #apply weight decay
+                p.mul_(1 - lr * weight_decay)
+                # Update the first moment estimate
+                exp_avg.mul_(beta1).add_(grad, alpha=1 - beta1)
+                # Update the second moment estimate
+                exp_avg_sq.mul_(beta2).addcmul_(grad, grad, value=1 - beta2)
+                # Apply moment-adjusted weights update
+                denom = exp_avg_sq.sqrt().add_(eps)
+                p.addcdiv_(exp_avg, denom, value=-adjusted_lr)
+                
+    
+        return loss
+                
+        
