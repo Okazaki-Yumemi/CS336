@@ -164,3 +164,87 @@ class SGD(torch.optim.Optimizer):
 
 代码见
 `cs336_codeNote14_adamW.md`
+
+
+**Problem_ Adamw_accounting:Resource accounting for training with AdamW**
+
+(a): How much peak memory does running AdamW require? 
+
+设 B = batch size
+T = context length
+L = number of layers
+D = d_model
+H = number of attention heads
+F = feedforward dimension
+V = vocab size
+
+模型参数
+P = 2VD + L(4D^2 + 3DF + 2D) + D
+
+题目令 F = 8/3 D
+所以 P = 2VD + L(12D^2 + 2D) + D
+
+FP32下: 于batch无关的固定部分 16P bytes
+
+**activation**
+| 中间结果                        |      元素数 |
+| --------------------------- | -------: |
+| 两次 RMSNorm                  |   (2BTD) |
+| Q、K、V                       |   (3BTD) |
+| (QK^\top) 和 Softmax         | (2BHT^2) |
+| Attention weighted sum      |    (BTD) |
+| Attention output projection |    (BTD) |
+| SwiGLU 两个输入投影、SiLU、逐元素乘法    |   (4BTF) |
+| SwiGLU 输出投影                 |    (BTD) |
+
+单个BLOCK
+Ablock = 8BTD + 2BHT^2 + 4BTF
+
+模型末尾再算
+- final RMSNorm: BTD
+- LM head logits: BTV
+- cross-entropy loss: BTV
+
+所以activation总数
+A = L * Ablock + BTD + 2BTV = L(8BTD + 2BHT^2 + 4BTF) + BTD + 2BTV
+
+activation内存 4A bytes
+
+总量为 16P + 4A bytes
+
+(b): GPT2-XL
+带入GPT2-XL参数
+
+P = 1,640,452,800
+
+16P = 26.25 GB
+
+每增加一个batch element， activation增加
+16.37 GB
+
+所以80GB内顶多3个batch element
+
+(c) adamw 本身的FLOPS
+| 操作            | FLOPs/parameter |
+| ------------- | --------------: |
+| Weight decay  |               2 |
+| 更新 (m)        |               3 |
+| 更新 (v)        |               4 |
+| 根据 (m,v) 更新参数 |               5 |
+
+Fadamw = 14P
+
+所以对于GPT2-XL，Fadamw = 22.97 GFLOPs
+
+(d) H100训练时间
+
+前面已经算出来1024的样本 forward约为 3.5168TFLOPS
+
+假设backward是2倍的forward FLOPS, 那么总共是 3.5168 * 3 = 10.5504 TFLOPS
+
+再假设 batch size 1024, 那么每个样本的FLOPS为 10.5504 / 1024 = 10.3 GFLOPS
+
+400k steps: Ftotal = 4.321 x 10^21 FLOPS
+H100 理论 495 TLOPS/s, 50% MFU
+
+对应 4850 hours, 即为 202days
