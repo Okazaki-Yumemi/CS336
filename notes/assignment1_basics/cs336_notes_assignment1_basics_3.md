@@ -83,3 +83,84 @@ final_loss: scalar
 
 实现见
 `cs336_codeNote13_crossentropyLoss.md`
+
+
+## 4.2 The SGD optimizer
+
+The simplest gradient-based optimizer is Stochastic Gradient Descent
+
+We start with randomly initialized parameters . Then for each step t = 0,...,T-1, we perform the following update:
+
+$$ \theta_{t+1} = \theta_t - \eta \nabla_\theta L(\theta_t;B_t) $$
+
+where $\eta$ is the learning rate, and $L(\theta)$ is the loss function,$B_t$ is the batch of data at step t.
+
+
+### 4.2.1 Implementing SGD in PyTorch
+
+We will subclass the Pytorch torch.optim.Optimizer class to implement our own SGD optimizer.
+
+```py
+
+def __init__(self, params,...) 
+```
+should initialize your optimizer.
+
+Here , params will be a collection of parameters to be optimized.
+
+Make sure to pass params to the init method of the base class , which will store these parameters for use in step.
+
+```py
+def step(self)
+```
+
+should make one update of the parameters. During the training loop, this will be called after the backward pass , so you have access to the gradients on the last batch.
+
+This method should iterate through each parameter tensor p and modify them in place.
+
+
+代码示例
+
+```py
+
+from collections.abc import Callable, Iterable
+
+from typing import Optional
+
+import torch
+import math
+
+class SGD(torch.optim.Optimizer):
+    def __init__(
+        self,
+        params,
+        lr = 1e-3,
+    ):
+      if lr < 0:
+          raise ValueError(f"Invalid learning rate: {lr}")
+      defaults = {"lr": lr}
+      super().__init__(params, defaults)
+
+    
+    def step(self,closure: Optional[Callable] = None):
+      loss = None if closure is None else closure()
+      for group in self.param_groups:
+          lr = group["lr"] # Get the learning rate for this group of parameters
+          for p in group["params"]:
+              if p.grad is None:
+                  continue
+
+              state = self.state[p] # get state associated with this parameter
+              t = state.get("t", 0) # get iteration number from the state, or 0.
+              grad = p.grad.data # Get the gradient of loss with respect to p.
+              p.data -= lr / math.sqrt(t + 1) * grad # Update the parameter in place.
+              state["t"] = t + 1 # increment the iteration number for this parameter
+
+      return loss
+```
+
+## 4.3 AdamW
+![alt text](image.png)
+
+代码见
+`cs336_codeNote14_adamW.md`

@@ -19,9 +19,9 @@ def cross_entropy_loss(
     stable_logits = logits - max_logits
     
     log_partition = torch.logsumexp(stable_logits, dim=-1)
-    target_logit = torch.gather(stable_logits, dim=-1, index=targets.unsqueeze(-1)).squeeze(-1)
+    target_logits = torch.gather(stable_logits, dim=-1, index=targets.unsqueeze(-1)).squeeze(-1)
    
-    loss_per_item = log_partition - target_logit
+    loss_per_item = log_partition - target_logits
    
    
    
@@ -85,7 +85,7 @@ squeeze(-1) 是为了把结果从 (N,1) 变回 (N,)
 第四步
 
 ```
-loss_per_item = log_partition - target_logit
+loss_per_item = log_partition - target_logits
 ```
 
 然后求平均值
