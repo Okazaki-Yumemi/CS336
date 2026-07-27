@@ -283,3 +283,41 @@ def cosine_lr_schedule(
 
 ```
 翻译一下逻辑就行
+
+## 4.5 Gradient clipping
+
+During Training,we can sometimes hit training examples that yield large gradients,which can destabilize training.
+
+To mitigate this , one technique often employed in practice is gradient clipping.
+
+The idea is to enforce a limit on the norm of the gradient after each backward pass before taking an optimizer step.
+
+Given the gradient (for all parameters) g, we compute its l2-norm,if this norm is less than a maximum value M,then we leave g as is; otherwise, we scale g down by a factor of M/||g||_2 + eps
+
+Note that the resulting norm will be just under M.
+
+这个也不难,直接笔记写这里
+
+```py
+@torch.no_grad()
+def gradient_clipping(
+    parameters: Any,
+    max_l2_norm: float
+)-> None:
+    grads = [p.grad for p in parameters if p.grad is not None]
+    
+    total_squared_norm = sum(torch.sum(g ** 2) for g in grads)
+    total_norm = math.sqrt(total_squared_norm)
+    
+    if total_norm > max_l2_norm:
+        scale = max_l2_norm / (total_norm + 1e-6)
+        
+        for grad in grads:
+            grad.mul_(scale)
+```
+
+torch.no_grad() 是为了在这个函数中不计算梯度，避免影响训练过程。
+
+然后首先先从 parameters 中提取出所有非 None 的梯度，计算它们的平方和，然后开方得到总的 l2 范数。
+
+然后计算total_norm 是否大于 max_l2_norm，如果大于，就计算一个缩放因子 scale = max_l2_norm / (total_norm + 1e-6)，然后对每个梯度进行缩放。
