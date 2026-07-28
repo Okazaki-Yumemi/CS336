@@ -1,6 +1,6 @@
 import math
 from typing import Any
-
+import numpy
 import torch
 from einops import einsum, rearrange
 from torch import nn
@@ -522,3 +522,23 @@ def gradient_clipping(
         
         for grad in grads:
             grad.mul_(scale)
+
+def data_loader(
+    x: numpy.ndarray,
+    batch_size: int,
+    context_length: int,
+    device: str,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    
+    used_device = torch.device(device)
+    
+    num_samples = x.shape[0]
+    indices = numpy.random.randint(0, num_samples - context_length, size=batch_size)
+    
+    x_batch = numpy.stack([x[i:i + context_length] for i in indices])
+    y_batch = numpy.stack([x[i + 1 : i + context_length + 1] for i in indices])
+    
+    x_batch_tensor = torch.tensor(x_batch, device=used_device, dtype=torch.long)
+    y_batch_tensor = torch.tensor(y_batch, device=used_device, dtype=torch.long)
+    
+    return x_batch_tensor, y_batch_tensor
