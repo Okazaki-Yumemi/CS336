@@ -91,3 +91,79 @@ y_batch (3,4) = [[48,52,67,71],[21,35,48,52],[71,83,96,99]]
 然后stack做的是从i开始，切片，堆叠成目标batch
 
 最后把batch转成tensor，放到指定device上。
+
+
+# 5.2 Checkpointing
+
+In addition to loading data. 
+
+We will also need to save models as we train. When running jobs, we often want to be able to resume a training run that stopped midway through. (e.g: due to your job timing out， machine failure, etc).
+
+Even when all goes well, we might also want to later have access to intermediate models (e.g, to study training dynamics post-hoc, take samples from models at different stages of training, etc).
+
+A checkpoint should have all the states that we need to resume training. We of course want to be able to restore model weights at a minimum. If using a stateful optimizer (Such as AdamW), we will also need to save the optimizer's state (e.g, in the case of AdamW, the moment estimates).
+
+Finally, to resume the learning rate schedule,we will need to know the iteation number we stopped at.  PyTorch makes it easy to save all of these : every nn.Module has a state_dict() method that returns a dictionary with all lernable weights; we can restore these weights later with the sister method load_state_dict().
+
+The same goes for any torch.optim.Optimizer.  Finally, torch.save(obj,dest) can dump an object (e.g., a dictionary containing tensors as some values, but also regular Python objects like integers) to a file(path) or file-like object, which can then be loaded back into memory with torch.load(src)
+
+
+**Problem**:
+
+Implement the following two functions to load and save checkpoints:
+
+```py
+
+def save_checkpoint(
+  model: torch.nn.Module,
+  optimizer: torch.optim.Optimizer,
+  iteration: int,
+  out: str | os.PathLike | typing.BinaryIO | typing.IO[bytes],
+)
+
+def load_checkpoint(
+  src: str | os.PathLike | typing.BinaryIO | typing.IO[bytes],
+  model: torch.nn.Module,
+  optimizer: torch.optim.Optimizer,
+)
+
+```
+
+save_checkpoint should dump all the state from the model,optimizer and iteration into the file-like object out.
+
+You can use state_dict method of both the model and the optimizer to get their relevant states adnd use torch.save(obj,out) to dump obj into out(PyTorch supports either a path or file-like object here). 
+A typical choice is to have obj be a dictionary, but you can use whatever format you want as long as you can load your checkpoint later.
+
+load_checkpoint should load a checkpoint from src (path or file-like object) and then recover the model and potimizer states from that checkpoint. Your function should return the iteration number that was saved to the checkpoint. You can use torch.load(src) to recover what you saved in your save_checkpoint implementation, and the load_state_dict method in both the model and optimizer to return them to zhe previous states.
+
+代码笔记
+
+```py
+def save_checkpoint(
+    model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer,
+    iteration: int,
+    out: str | os.PathLike | typing.BinaryIO | typing.IO[bytes]
+):
+    checkpoint = {
+        "model_state_dict": model.state_dict(),
+        "optimizer_state_dict": optimizer.state_dict(),
+        "iteration": iteration,
+    }
+    torch.save(checkpoint, out)
+    
+def load_checkpoint(
+    model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer,
+    src: str | os.PathLike | typing.BinaryIO | typing.IO[bytes]
+) -> int:
+    checkpoint = torch.load(src)
+    model.load_state_dict(checkpoint["model_state_dict"])
+    optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+    iteration = checkpoint["iteration"]
+    return iteration
+```
+很简单的两个啊，就是利用torch.save可以保存序列化文件的性质。因为考虑到字典是最方便的，所以就用字典了。
+
+
+# Assignment 1 : Finished!
