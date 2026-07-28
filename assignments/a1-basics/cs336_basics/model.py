@@ -4,6 +4,8 @@ import numpy
 import torch
 from einops import einsum, rearrange
 from torch import nn
+import os
+import typing
 
 class Linear(nn.Module):
     def __init__(
@@ -542,3 +544,27 @@ def data_loader(
     y_batch_tensor = torch.tensor(y_batch, device=used_device, dtype=torch.long)
     
     return x_batch_tensor, y_batch_tensor
+
+def save_checkpoint(
+    model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer,
+    iteration: int,
+    out: str | os.PathLike | typing.BinaryIO | typing.IO[bytes]
+):
+    checkpoint = {
+        "model_state_dict": model.state_dict(),
+        "optimizer_state_dict": optimizer.state_dict(),
+        "iteration": iteration,
+    }
+    torch.save(checkpoint, out)
+    
+def load_checkpoint(
+    model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer,
+    src: str | os.PathLike | typing.BinaryIO | typing.IO[bytes]
+) -> int:
+    checkpoint = torch.load(src)
+    model.load_state_dict(checkpoint["model_state_dict"])
+    optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+    iteration = checkpoint["iteration"]
+    return iteration
