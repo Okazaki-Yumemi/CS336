@@ -38,3 +38,37 @@ Specifically, your script should support the following:
 
 实现见
 `cs336_assignment2_codenote1_benchmarking.py`
+
+### 2.1.4 Nsight Systems Profiler
+
+To know how much time our program spends in each component(e.g. function) , we can use a profiler.
+
+An execution profiler instruments the code by inserting guards when functions begin and finish running, and thus can give detailed execution stastics at the function level.
+
+Nvidia ships a profiler that we can use via the CLI nsys.  
+
+Using nsys is straightforward: run your python script from the previous sctions with nsys profile prepended.
+
+> $ uv run nsys profile -- python benchmark.py
+
+a more comprehensive profiling run may look like
+> $ uv run nsys profile --trace=cuda,cudnn,cublas,osrt,nvtx --pytorch=functions-trace,autograd-shapes-nvtx --cudabacktrace=all --python-backtrace=cuda --gpu-metrics-devices=0 --python benchmark.py
+
+**Problem nsys_profile**
+
+profile your forward pass , backward pass and optimizer step using nsys with tow model size from tabel 1 of your choice as well as three power of two context length larger thant 128,where the largest available size should be the longest context length you can fit in memory. Pick the combinations you think would be the most interesting to look at. For each profile answer the following questions:
+
+(a) what is the total time spent on your forward pass?
+(b) what cuda kernel takes the most cumulative GPU time during the forward pass? how many times this kernel is invoked during a single forward pass?
+(c) Although the vast majority of FLOPs take place in matrix multiplications, you will notice 
+that several other kernels still take a non-trivial amount of the overall runtime. What other 
+kernels besides matrix multiplies do you see accounting for non-trivial CUDA runtime in the 
+forward pass?
+(d)  Profile running one complete training step with your implementation of AdamW.  How does the fraction of time spent on matrix multiplication change, compared to doing inference (forward pass only)? How about other kernels?
+(e) Compare the runtime of the softmax operation versus the matrix multiplication operations 
+within the self-attention layer of your model during a forward pass. How does the difference 
+in runtimes compare to the difference in FLOPs?
+
+解答见
+`cs336_assignment2_codenote2_nsys.md`
+
