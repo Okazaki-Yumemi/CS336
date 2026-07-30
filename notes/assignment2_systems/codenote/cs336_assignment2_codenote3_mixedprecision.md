@@ -2,6 +2,14 @@
 
 ```py
 
+parser.add_argument(
+        "--precision",
+        choices=["fp32","bf16"],
+        default= "fp32",
+    )
+
+
+
 def run_step(
     model : BasicsTransformerLM,
     inputs: torch.Tensor,

@@ -200,3 +200,62 @@ nullcontext no-op context manager to be useful.
 
 要改代码，见
 `cs336_assignment2_codenote3_mixedprecision.md`
+
+
+### 2.1.6 Profiling Memory
+
+So far, we have been looking at compute performance. We’ll now shift our attention to memory, another 
+major resource in language model training and inference. PyTorch also ships with a powerful memory 
+profiler, which can keep track of allocations over time.
+
+TO use the memory profiler, we can use the following code snippet:
+
+```py
+
+... # warm-up phase in your benchmarking script
+
+# start recording memory history
+
+torch.cuda.memory._record_memory_history(max_entries=1000000)
+
+... # what you want to profile in your benchmarking script
+
+# save a pickle file to be loaded by pytorch's online tool.
+
+torch.cuda.memory._dump_snapshot("memory_snapshot.pickle")
+
+# stop recording histroy
+torch.cuda.memory._record_memory_history(enabled = None)
+```
+
+把文件送去 pytorch.org/memory_viz，可视化。
+
+
+**Problem memory_profiling**
+
+(a) Add an option to your profiling script to run your model through the memory profiler
+
+(b) What is the peak memory usage of each context length when doing a forward pass? What 
+about when doing a full training step?
+
+(c) Find the peak memory usage of the xl model when using mixed-precision, for both a forward 
+pass and a full training step. Does mixed-precision significantly affect memory usage?
+
+(d) Consider the xl model. Given our reference hyperparameters, what is the size of a tensor of 
+activations in the Transformer residual stream, in single-precision? Give this size in MiB (i.e., 
+divide the number of bytes by 10242)
+
+(e) Now look closely at the “Active Memory Timeline” from pytorch.org/memory_viz of a 
+memory snapshot of the xl model doing a forward pass. When you reduce the “Detail” level, 
+the tool hides the smallest allocations to the corresponding level (e.g., putting “Detail” at 
+10% only shows the 10% largest allocations). What is the size of the largest allocations 
+shown? Looking through the stack trace, can you tell where those allocations come from?
+
+(f) Nsight Systems also has flags for memory profiling. You can combine these with the Nsight 
+flags from before to understand what allocations are happening at different steps in your 
+model’s lifespan. Use the PyTorch-provided NVTX labels to determine how much memory is 
+saved for backward (these tensors are often called residuals) by a single TransformerBlock in 
+your model. Note the 5 largest contributing operations, and what percentage of the overall 
+memory they contribute.
+
+见 `cs336_assignment2_codenote4_memoryprofiling.md`
