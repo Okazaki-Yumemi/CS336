@@ -102,6 +102,12 @@ def parse_args() -> argparse.Namespace:
         default= "cuda"
     )
     
+    parser.add_argument(
+        "--precision",
+        choices=["fp32","bf16"],
+        default= "fp32",
+    )
+    
     return parser.parse_args()
 
 def build_model(
@@ -152,16 +158,25 @@ def run_step(
     targets: torch.Tensor,
     mode: str,
     optimizer : AdamW,
+    precision: str
 ):
     if mode != "forward":
         optimizer.zero_grad(set_to_none= True)
         
-    logits = model(inputs)
+    use_bf16 = precision == "bf16"
+        
+    with torch.autocast(
+        device_type= "cuda",
+        dtype= torch.bfloat16,
+        enabled= use_bf16,
+    ):
+        logits = model(inputs)
+        
+        if mode != "forward":
+            loss = cross_entropy(logits,targets)
     
     if mode == "forward":
         return
-
-    loss = cross_entropy(logits,targets)
     
     loss.backward()
     
@@ -176,6 +191,7 @@ def benchmark(
     optimizer : AdamW,
     warmup_steps : int,
     measurement_steps : int,
+    precision : str,
 ): 
     
     for _ in range(warmup_steps):
@@ -184,7 +200,8 @@ def benchmark(
             inputs,
             targets,
             mode,
-            optimizer
+            optimizer,
+            precision,
         )
         torch.cuda.synchronize()
         
@@ -200,7 +217,8 @@ def benchmark(
                 inputs,
                 targets,
                 mode,
-                optimizer
+                optimizer,
+                precision
             )
             torch.cuda.synchronize()
             end = timeit.default_timer()
@@ -245,7 +263,7 @@ def main() -> None:
         parameter.numel()
         for parameter in model.parameters()
     )
-    
+    print("=========================================")
     print(f"device: {device}")
     print(f"model size: {args.model_size}")
     print(f"mode: {args.mode}")
@@ -253,6 +271,7 @@ def main() -> None:
     print(f"parameters: {num_parameters:,}")
     print(f"input shape: {tuple(inputs.shape)}")
     print(f"target shape: {tuple(targets.shape)}")
+    print(f"precision: {args.precision}")
     
     
     optimizer = AdamW(model.parameters())
@@ -265,12 +284,13 @@ def main() -> None:
         mode = args.mode,
         optimizer= optimizer,
         warmup_steps= args.warmup_steps,
-        measurement_steps= args.measurement_steps
+        measurement_steps= args.measurement_steps,
+        precision= args.precision
     )
     
     print(f"mean time(ms): {mean*1000}")
     print(f"std(ms) : {std*100}")
-    
+    print("=========================================")
 
 if __name__ == "__main__":
     main()
