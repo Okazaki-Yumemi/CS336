@@ -72,3 +72,131 @@ in runtimes compare to the difference in FLOPs?
 解答见
 `cs336_assignment2_codenote2_nsys.md`
 
+### 2.1.5 Mixed Precision
+
+hybrid precision training is good. 
+
+For ex.  B200 AT FP32 is 80 TFLOPS, but for FP16 or BF16, it is 2500 TFLOPS.  This is a 30x speedup.  So we want to use mixed precision training to speed up our training.
+
+**Problem mixed_precision_accumulation**
+
+Run the following code and comment on the accuracy
+
+```py
+
+s = torch.tensor(0, dtype=torch.float32, device="cuda")
+for i in range(1000):
+    s += torch.tensor(0.01, dtype = torch.float32)
+print(s)
+
+s = torch.tensor(0, dtype=torch.float16, device="cuda")
+for i in range(1000):
+    s += torch.tensor(0.01, dtype = torch.float16)
+print(s)
+
+s = torch.tensor(0, dtype=torch.float32, device="cuda")
+for i in range(1000):
+    s += torch.tensor(0.01, dtype = torch.float16)
+print(s)
+
+s = torch.tensor(0,dtype=torch.float32)
+for i in range(1000):
+  x = torch.tensor(0.01,dtype=torch.float16)
+  s += x.type(torch.float32)
+print(s)
+```
+输出是
+```
+FP32 加数 + FP32 累加器：10.0001335
+FP16 加数 + FP16 累加器： 9.953125
+FP16 加数 + FP32 累加器：10.0021362
+显式转 FP32 后累加：      10.0021362
+```
+区别来自于
+1. 表示误差： FP16 不能精确表示 0.01
+2. 累加误差： FP16 累加器每一次都要舍入，1000次后误差累计明显
+
+
+
+
+**Problem  benchmarking_mixed_precision**
+(a) consider following model
+
+```py
+
+class ToyModel(nn.Module):
+    def __init__(self, in_features: int, out_features: int):
+        super().__init__()
+        self.fc1 = nn.Linear(in_features,10,bias=False)
+        self.ln = nn.LayerNorm(10)
+        self.fc2 = nn.Linear(10,out_features,bias=False)
+        self.relu = nn.ReLU()
+    
+def forward(self, x):
+    x = self.relu(self.fc1(x))
+    x = self.ln(x)
+    x = self.fc2(x)
+    return x
+```
+Suppose we are training the model on a GPU and that the model parameters are originally in 
+FP32. We’d like to use autocasting mixed precision with FP16. What are the data types of:
+- the model parameters within the autocast context?
+- the output of the first feed-forward layer (ToyModel.fc1)?
+- the output of layer norm (ToyModel.ln)?
+- the model’s predicted logits?
+- the loss?
+- the model’s gradients?
+
+| 部分                   | dtype           |
+| -------------------- | --------------- |
+| 模型参数                 | `torch.float32` |
+| `fc1` 输出             | `torch.float16` |
+| `LayerNorm` 输出       | `torch.float32` |
+| 最终 logits，即 `fc2` 输出 | `torch.float16` |
+| loss                 | `torch.float32` |
+| 参数梯度                 | `torch.float32` |
+
+原因是 autocast 不会永久修改参数 dtype。linear 被列为适合 FP16 的算子，而 layer_norm、log_softmax、cross_entropy 等数值敏感算子会以 FP32 执行。参数仍是 FP32 leaf tensor，所以最终保存在 parameter.grad 中的梯度也是 FP32.
+
+```
+FP32 input
+  ↓ fc1
+FP16
+  ↓ ReLU
+FP16
+  ↓ LayerNorm
+FP32
+  ↓ fc2
+FP16 logits
+  ↓ cross entropy
+FP32 loss
+  ↓ backward
+FP32 parameter gradients
+```
+
+(b) You should have seen that FP16 mixed precision autocasting treats the layer normalization 
+layer differently than the feed-forward layers. What parts of layer normalization are sensitive 
+to mixed precision? If we use BF16 instead of FP16, do we still need to treat layer 
+normalization differently? Why or why not?
+
+Layer norm 的核心过程是
+```
+计算均值
+计算方差
+减去均值
+除以 sqrt(方差 + epsilon)
+```
+
+其中均值和方差需要对大量元素进行 reduction。低精度累加会产生明显误差；计算方差时还有平方、相减和倒数平方根，可能出现溢出、下溢或数值不稳定。
+
+> Layer normalization is sensitive to mixed precision because computing the mean and variance involves reductions, squaring, subtraction, and reciprocal square roots, all of which can accumulate numerical error. BF16 has a much wider dynamic range than FP16, reducing overflow and underflow, but its mantissa is still limited, so performing the normalization reductions in FP32 remains beneficial.
+
+(c) Modify your benchmarking script to optionally run the model using mixed precision with 
+BF16. Time the forward and backward passes with and without mixed-precision for each 
+language model size described in 
+Section 2.1.2. Compare the results of using full precision 
+versus mixed precision, and comment on any trends as model size changes. You may find the 
+nullcontext no-op context manager to be useful.
+
+要改代码，见
+`cs336_assignment2_codenote3_mixedprecision.md`
