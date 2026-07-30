@@ -189,23 +189,23 @@ def benchmark(
         torch.cuda.synchronize()
         
     times : list[float] = []
-    
-    for _ in range(measurement_steps):
-        torch.cuda.synchronize()
-        
-        start = timeit.default_timer()
-        
-        run_step(
-            model,
-            inputs,
-            targets,
-            mode,
-            optimizer
-        )
-        torch.cuda.synchronize()
-        end = timeit.default_timer()
-        
-        times.append(end-start)
+    with torch.cuda.nvtx.range("measurement"):
+        for _ in range(measurement_steps):
+            torch.cuda.synchronize()
+            
+            start = timeit.default_timer()
+            
+            run_step(
+                model,
+                inputs,
+                targets,
+                mode,
+                optimizer
+            )
+            torch.cuda.synchronize()
+            end = timeit.default_timer()
+            
+            times.append(end-start)
     
     mean = sum(times)/len(times)
     std = numpy.std(times)
