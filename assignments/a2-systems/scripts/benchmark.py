@@ -11,6 +11,7 @@ from cs336_basics.model import BasicsTransformerLM
 from cs336_basics.optimizer import AdamW
 from cs336_basics.nn_utils import cross_entropy
 
+from pathlib import Path
 
 
 VOCAB_SIZE = 10_000
@@ -106,6 +107,17 @@ def parse_args() -> argparse.Namespace:
         "--precision",
         choices=["fp32","bf16"],
         default= "fp32",
+    )
+    
+    parser.add_argument(
+        "--memory-profile",
+        action= "store_true",
+    )
+    
+    parser.add_argument(
+        "--snapshot-path",
+        type=str,
+        default="profiles/memory_snapshot.pickle",
     )
     
     return parser.parse_args()
@@ -230,6 +242,77 @@ def benchmark(
     
     return mean,std
 
+def profile_memory(
+    model: BasicsTransformerLM,
+    inputs: torch.Tensor,
+    targets: torch.Tensor,
+    mode : str,
+    optimizer : AdamW,
+    precision: str,
+    warmup_steps :int,
+    snapshot_path:str,
+):
+    if mode not in {"forward","train"}:
+        raise ValueError("Memory profiling only supports forward or train mode")
+
+    def profile_step():
+        if mode == "forward":
+            # 题目书评inference only, 不考虑反向传播
+            with torch.inference_mode():
+                run_step(
+                    model,
+                    inputs,
+                    targets,
+                    mode,
+                    optimizer,
+                    precision
+                )
+        else:
+            run_step(
+                model,
+                inputs,
+                targets,
+                mode,
+                optimizer,
+                precision,
+            )
+    for _ in range(warmup_steps):
+        profile_step()
+    
+    torch.cuda.synchronize()
+    
+    Path(snapshot_path).parent.mkdir(parents=True,exist_ok=True)
+    
+    # 从稳态显存统计
+    torch.cuda.reset_peak_host_memory_stats()
+    
+    torch.cuda.memory._record_memory_history(
+        max_entries = 1_000_000
+    )
+    
+    try:
+        #分析一个step
+        profile_step()
+        torch.cuda.synchronize()
+        
+        peak_allocated = torch.cuda.max_memory_allocated()
+        peak_reserved = torch.cuda.max_memory_reserved()
+        
+        torch.cuda.memory._dump_snapshot(snapshot_path)
+    finally:
+        torch.cuda.memory._record_memory_history(
+            enabled= None
+        )
+    
+    print(f"snapshot: {snapshot_path}")
+    print(
+        f"peak allocated: {peak_allocated / 1024**3:.3f} GiB"
+    )
+    print(
+        f"peak reserved: {peak_reserved/1024**3:.3f} GiB"
+    )
+    
+
 
 def main() -> None:
     args = parse_args()
@@ -276,21 +359,33 @@ def main() -> None:
     
     optimizer = AdamW(model.parameters())
     
+    if args.memory_profile:
+        profile_memory(
+            model = model,
+            inputs= inputs,
+            targets= targets,
+            mode = args.mode,
+            optimizer= optimizer,
+            precision= args.precision,
+            warmup_steps= args.warmup_steps,
+            snapshot_path= args.snapshot_path,
+        )
+        print("=========================================")
+    else:
+        mean,std = benchmark(
+            model= model,
+            inputs= inputs,
+            targets= targets,
+            mode = args.mode,
+            optimizer= optimizer,
+            warmup_steps= args.warmup_steps,
+            measurement_steps= args.measurement_steps,
+            precision= args.precision
+        )
     
-    mean,std = benchmark(
-        model= model,
-        inputs= inputs,
-        targets= targets,
-        mode = args.mode,
-        optimizer= optimizer,
-        warmup_steps= args.warmup_steps,
-        measurement_steps= args.measurement_steps,
-        precision= args.precision
-    )
-    
-    print(f"mean time(ms): {mean*1000}")
-    print(f"std(ms) : {std*100}")
-    print("=========================================")
+        print(f"mean time(ms): {mean*1000}")
+        print(f"std(ms) : {std*100}")
+        print("=========================================")
 
 if __name__ == "__main__":
     main()
