@@ -51,3 +51,193 @@ We can also compile our entire PyTorch model with torch.compile(model) , or even
 见
 `cs336_assignment2_codenote6_compilebench.md`
 
+### 4.2.1 Example - Weighted Sum
+
+To introduce what you'll need to know about triton and how it interoperates with PyTorch, we will work through an example kernel for a "weighted sum" operation. 
+
+For further resources on getting up to speed with Triton, see the [Triton documentation](https://triton-lang.org/).
+
+
+
+Given an input matrix X, we'll multiply its entries by a column-wise weight vector w, and sum each row, giving us the matrix-vector product of X and w. We are going to work through the forward pass of this operation first, and then write the Triton kernel for the backward pass.
+
+
+**Forward pass**
+
+The forward pass of our kernel is just the following broadcasted inner product.
+
+```py
+
+def weighted_sum(x, weight):
+    # Here, assume that x has n-dim shape [..., D], and weight has 1D shape [D]
+    return (weight * x).sum(axis = -1)
+```
+
+Compute the weighted sum of a tile of rows of x, and write the corresponding scalar outputs to the output tensor.
+
+In Triton, a program instance is a block of threads all running the same program, and these thread blocks can be run in parallel on the GPU.
+
+Instead of taking tensors as arguments, we take pointers to their first elements, as well as strides for each tensor that tell us how to move along axes.
+
+We will use the block pointer abstraction with `tl.make_block_ptr` to greatly simplify the pointer arithmetic, although this means we need to do some setup to prepare the block pointers
+
+![alt text](image.png)
+
+Refer to figure above, for a schematic of tiling and how block pointers are advanced. The weighted sum function from above looks like the following.
+
+```py
+
+import triton
+import triton.language as tl
+
+@triton.jit
+
+def weighted_sum_kernel(
+  x_ptr,weight_ptr, # input ptrs,
+  output_ptr, # output ptr
+  x_stride_row,x_stride_dim , # Strides tell us how to move one element in each axis of a tensor
+  weight_stride_dim, # likely 1
+  output_stride_row, # likely 1
+  NUM_ROWS, D, 
+  ROWS_TILE_SIZE: tl.constexpr, D_TILE_SIZE: tl.constexpr, # Tile shapes must be known at compile time
+):
+
+  # each instance will compute weighted sum of a tile of rows of x
+  # `tl.program_id` gives us a way to check which thread block we're running in
+
+  row_tile_idx = tl.program_id(0) # which tile of rows are we computing?
+
+  # Block pointers gives us a way to select from an ND region of memory
+  # and move our selection around
+  # The block pointer must know:
+  # - The pointer to the first element of the tensor
+  # - Tge overall shape of the tensor to handle out of bounds accesses
+  # - The strides of each dimension to use the memory layout properly
+  # - The ND coordinates of the starting block, i.e., "offsets"
+  # - The block shape to load/store at a time
+  # - The order of the dimensions in memory from major to minor
+  #   axes (= np.argsort(strides)) for optimizations, needed for 
+  #   TMA support on >= hopper
+
+  x_block_ptr = tl.make_block_ptr(
+    base=x_ptr,
+    shape=(NUM_ROWS,D),
+    strides=(x_stride_row,x_stride_dim),
+    offsets=(row_tile_idx * ROWS_TILE_SIZE,0),
+    block_shape=(ROWS_TILE_SIZE,D_TILE_SIZE),
+    order=(0,1)
+  )
+
+  weight_block_ptr = tl.make_block_ptr(
+    base=weight_ptr,
+    shape=(D,),
+    strides=(weight_stride_dim,),
+    offsets=(0,),
+    block_shape=(D_TILE_SIZE,),
+    order=(0,)
+  )
+  
+  output_block_ptr = tl.make_block_ptr(
+    base=output_ptr,
+    shape=(NUM_ROWS,),
+    strides=(output_stride_row,),
+    offsets=(row_tile_idx * ROWS_TILE_SIZE,),
+    block_shape=(ROWS_TILE_SIZE,),
+    order=(0,)
+  )
+
+  output = tl.zeros((ROWS_TILE_SIZE,), dtype = tl.float32)
+
+  for i in range(tl.cdiv(D, D_TILE_SIZE)):
+    # Load the current block pointer
+    # Since ROWS_TILE_SIZE might not divide NUM_ROWS, and D_TILE_SIZE might not divede D,
+    # we need boudary checks for both dimensions
+    row = tl.load(x_block_ptr, boundary_check = (0,1), padding_option = "zero")
+    weight = tl.load(weight_block_ptr,boundary_check = (0,), padding_option = "zero") # (D_TILE_SIZE,)
+
+    # Compute the weighted sum of the row
+    output += tl.sum(row * weight[None, :], axis = 1) # (ROWS_TILE_SIZE,)
+
+    # Move the pointers to the next tile
+    # These are (rows, columns) coordinate deltas
+    x_block_ptr = x_block_ptr.advance((0,D_TILE_SIZE)) # Move by D_TILE_SIZE in the last dimension
+    weight_block_ptr = weight_block_ptr.advance((D_TILE_SIZE,)) # Move by D_TILE_SIZE in the last dimension
+  # Store the output tile
+  tl.store(output_block_ptr, output, boundary_check = (0,))
+```
+
+
+Let's now warp this kernel in a PyTorch Autograd function that will interoperate with PyTorch
+
+```py
+
+class WeightedSumFunc(torch.autograd.Function):
+  @staticmethod
+  def forward(ctx, x, weight):
+    # Cache x and weight to be used in the backward pass ,when
+    # we only receive the gradient wrt. the output tensor, and 
+    # Need to compute the gradients wrt. x and weight
+    D, output_dims = x.shape[-1], x.shape[:-1]
+
+    # Reshape input tensor to 2D
+    input_shape = x.shape
+    x = rearrange(x, "... d -> (...) d") # (N, D)
+    ctx.save_for_backward(x, weight)
+
+    assert len(weight.shape) == 1, "Weight must be a 1D tensor"
+    assert weight.shape[0] == D, f"Weight must have shape ({D},), but got {weight.shape}"
+    assert x.is_cuda and weight.is_cuda, "Inputs must be CUDA tensors"
+    assert x.is_contiguous() and weight.is_contiguous(), "Inputs must be contiguous tensors"
+
+    ctx.D_TILE_SIZE = triton.next_power_of_2(D) // 16 # roughly 16 loops through the embedding dimension
+    ctx.ROWS_TILE_SIZE = 16 # Each thread processes 16 batch elements at a time
+    ctx.input_shape = input_shape
+
+    # Need to initialize empty result tensor, Note that these elements are not necessarily 0!
+    y = torch.empty(output_dims, device = x.device, dtype = x.dtype)
+
+    # launch the kernel with enough blocks to cover all rows of x
+    n_rows = y.numel()
+    weighted_sum_fwd[(triton.cdiv(n_rows, ctx.ROWS_TILE_SIZE),)](
+      x, weight, y,
+      x.stride(0), x.stride(1),
+      weight.stride(0),
+      y.stride(0),
+      n_rows, D,
+      ctx.ROWS_TILE_SIZE, ctx.D_TILE_SIZE
+    )
+
+    return y.view(input_shape[:-1]) # reshape back to original input shape without the last dimension
+```
+
+
+看到一个 Triton kernel，先问五件事：
+
+```
+1. Grid 有多少个 program instance？
+2. 每个 program 负责输出的哪一个 tile？
+3. 输入 block pointer 的起始 offsets 是什么？
+4. 循环中 block pointer 向哪个方向 advance？
+5. 哪些数据留在片上累加，最后才 store 回 HBM？
+```
+
+对于这个weighted sum
+```
+1. grid = ceil(NUM_ROWS / ROWS_TILE_SIZE)
+2. 每个 program 负责 ROWS_TILE_SIZE 行
+3. 起始行为 program_id × ROWS_TILE_SIZE
+4. 沿 D 方向逐块 advance
+5. output accumulator 留在片上，最后一次性写回
+```
+
+```
+weighted sum：
+固定一组行
+沿 D 方向扫描 tile
+维护行级 accumulator
+
+FlashAttention：
+固定一组 query 行
+沿 key/value 方向扫描 tile
+维护在线 softmax 和 output accumulator
+```
