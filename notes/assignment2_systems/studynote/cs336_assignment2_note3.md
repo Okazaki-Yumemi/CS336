@@ -548,3 +548,13 @@ For elements that are masked out , add the constant value of -1e6 to the corresp
 
 实现见
 `cs336_assignment2_codenote7_flashfwd.md`
+
+**Implementing the backward pass with recomputation**:
+
+**Problem**: FlashAttention-2 Backward Pass
+
+Using PyTorch. and torch.compile.
+
+`cs336_assignment2_codenote8_flashbwd.md`
+
+
