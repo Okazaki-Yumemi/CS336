@@ -59,13 +59,15 @@ def _flash_forward_tiled_pytorch(
         
         # m = running maximum, l = running exponential sum, acc = running output numerator
         
+        q_float = q_tile.float() # 确保q_tile是float32
+        
         for k_start in range(0, n_keys, k_tile_size):
             k_end = min(k_start + k_tile_size, n_keys)
             k_tile = k[:, k_start:k_end, :] # [batch_size, k_tile_size, d]
             v_tile = v[:, k_start:k_end, :] # [batch_size, k_tile_size, d]
             
             # 计算当前tile的注意力分数
-            q_float = q_tile.float() # 确保q_tile是float32
+            
             k_float = k_tile.float() # 确保k_tile是float32
             v_float = v_tile.float() # 确保v_tile是float32
             
@@ -111,9 +113,13 @@ class FlashAttentionPytorch(torch.autograd.Function):
         is_causal: bool = False,
     ) -> torch.Tensor:
         
+        if is_causal:
+            raise NotImplementedError("Causal mode is not implemented in this reference implementation.")
+        
+        
         output, logsumexp = _flash_forward_tiled_pytorch(q, k, v)
         
-        ctx.save_for_backward(q, k, v, logsumexp)
+        ctx.save_for_backward(logsumexp, q, k, v, output)
         ctx.is_causal = is_causal
         
         return output
@@ -126,3 +132,13 @@ class FlashAttentionPytorch(torch.autograd.Function):
         
         raise NotImplementedError
     
+def flash_attention_pytorch(
+    q: torch.Tensor,
+    k: torch.Tensor,
+    v: torch.Tensor,
+    is_causal: bool = False,
+) -> torch.Tensor:
+    """
+    A convenience wrapper around the FlashAttentionPytorch autograd function.
+    """
+    return FlashAttentionPytorch.apply(q, k, v, is_causal)
