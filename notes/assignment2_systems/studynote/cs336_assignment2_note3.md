@@ -398,3 +398,153 @@ Note the grad_fn attached to the tensor —— this shows that PyTorch Knows wha
 
 This completes our Triton implementation of the weighted sum operation.
 
+### 4.2.2 Flash Attention-2 Forward Pass
+
+You will replace your PyTorch attention implementation with a significnatly improved Triton implementation following FlashAttention-2.
+
+FlashAttention-2 employs some tricks to compute the forward pass in tiles, which allows for efficient memory access patterns and avoids the need to materialize the full attention matrix on global memory.
+
+官方推荐先去阅读 original FlashAttention-2 paper. T.Dao et al.,2022.先看一下
+
+#### Paper reading
+
+
+**Understanding inefficiencies in vanilla attention**:
+
+Recall that the forward pass for attention (ignoring masking for now) can be written as:
+
+$$ S = QK^T/ \sqrt{d} $$
+$$ P_{ij} = softmax_j(S_{ij}) $$
+$$ O = PV $$
+
+The standard backward pass is:
+
+$$ dV = P^T dO $$
+$$ dP = dO V^T $$
+$$ dS_i = dsoftmax(dP_i) = (diag(P_i) - P_i P_i^T) dP_i $$
+$$ dQ = dSK / \sqrt{d} $$
+$$ dK = dS^T Q / \sqrt{d} $$
+
+As we can see, the backward pass depends on some very large activations from the forward pass.
+
+For example, computing $dV$ requires $P$, which are the attention scores of shape (batch_size,n_heads,seq_len,seq_len). —— the size of this activation matrix depends quadratically on the sequence length.
+
+**The main goal of FlashAttention is to avoid reading and writing the attention matrix to and from HBM, to reduce IO and peak memory costs.**
+
+We accomplish using three techniques:
+
+**Tiling**
+
+To avoid reading and writing the attention matrix to and from HBM, we compute the softmax reduction without access to the whole input.
+Specifically, we restructure the attention computation to split the input into tiles and kamke several passes over input tiles,thus incrementally performing the softmax reduction.
+
+**Recomputation**:
+
+We avoid storing the large intermediate attention matrices of shape (batch_size, n_heads, seq_len, seq_len) in HBM.
+
+In our final kernel we will compute the L in an online manner,but the final result should be the same.
+
+With tiling and recomputation together, our memory IO and peak usage no longer depend on quadratic seq_length , and therefore we may use larger seq len.
+
+**Operator fusion**:
+we avoid repeated memory IO for attention matrix and other intermediate activations by performing all our operations in a single kernel.
+
+We will write a single Triton kernel for the forward pass that performs all the operations involved in attention with limited data transfer between HBM and SRAM.
+
+Operator fusion is partly enabled by recomputation, since we can avoid the usual memory IO we would pay to store every intermediate activation to HBM.
+
+**Backward pass with recomputation**:
+
+Before we start, we precompute the value D = rowsum(O o dO) in global memory. where o is elementwise multiplication.
+
+
+The full calculation for the backward pass is now:
+
+$$ S = QK^T/ \sqrt{d} $$
+$$ P_{ij} = exp(S{ij} - L{i}) $$
+$$ dV = P^T dO $$
+$$ dP = dO V^T $$
+$$ dS_{ij} = P_{ij}(dP_{ij} - D_i) $$
+$$ dQ = dSK / \sqrt{d} $$
+$$ dK = dS^T Q / \sqrt{d} $$
+
+We can see that the sequence of operations does not require us to have stored the attention scores P in HBM, during the forward pass——we recompute them from activations Q,K, and L in backward pass.
+
+![alt text](image-1.png)
+
+**Problem: FlashAttention-2 Forward Pass**:
+
+(a) Write a pure PyTorch autograd.Function that implements the flashattention-2 forward pass.
+
+take input of Q K V and a flag is_causal and produce the output O and the logsumexp value L.
+
+The autograd.Function forward should then save L,Q,K,V,O for the backward pass and retunr O.
+
+Remember that the implementation of the forward pass always tkae the context as its first parameter.
+
+Any autograd.Function class needs to implement a backward method,but for now, you can just raise NotImplementedError in the backward method.
+
+The interface is then def forward(ctx, Q, K, V, is_causal = False).
+
+(b) Write a Triton kernel for the forward pass of FlashAttention-2 following Algorithm 1.
+Then , write another subclass of torch.autograd.Function that call this fused kernel in the forward pass. Instead of computing the result in PyTorch.
+
+- To debug, we suggest comparing the results of each Triton operation you perform with the tiled PyTorch implementation you wrote in part (a).
+- Your launch grid should be set as (𝑇𝑞,batch_size), meaning each Triton program instance 
+will load only elements from a single batch index, and only read/write to a single query 
+tile of 𝑸, 𝑶, and L
+-  The kernel should only have a single loop, which will iterate key tiles 1 ≤ 𝑗 ≤ 𝑇𝑘.
+-  Advance block pointers at the end of the loop.
+- Use the function declaration below (using the block pointer we give you, you should be 
+able to infer the setup of the rest of the pointers)
+
+```py
+
+@triton.jit
+def flash_fwd_kernel(
+  Q_ptr, K_ptr, V_ptr, O_ptr, L_ptr,
+  stride_qb, stride_qq, stride_qd,
+  stride_kb, stride_kk, stride_kd,
+  stride_vb, stride_vv, stride_vd,
+  stride_ob, stride_oo, stride_od,
+  stride_lb, stride_lo,
+  N_QUERIES, N_KEYS,
+  scale,
+  D: tl.constexpr,
+  Q_TILE_SIZE: tl.constexpr,
+  K_TILE_SIZE: tl.constexpr,
+):
+  # Program indices
+  query_tile_index = tl.program_id(0) # which tile of queries are we computing?
+  batch_index = tl.program_id(1) # which batch are we computing?
+
+  # Offset each pointer with the corresponding batch index
+  # multiplied with the batch stride for each tensor
+  Q_block_ptr = tl.make_block_ptr(
+    base=Q_ptr + batch_index * stride_qb,
+    shape=(N_QUERIES, D),
+    strides=(stride_qq, stride_qd),
+    offsets=(query_tile_index * Q_TILE_SIZE, 0),
+    block_shape=(Q_TILE_SIZE, D),
+    order=(1, 0),
+  )
+
+  ...
+```
+where scale is $\frac{1}{\sqrt{d}}$. and Q_TILE_SIZE and K_TILE_SIZE are $B_q$ and $B_k$ respectively.
+
+
+- The on chip buffers (O_i , l , m) should have dtype tl.float32, if you're accumulating into an output buffer, use the acc argument (acc = tl.dot(..., acc = acc))
+
+- Cast P to the dtype of V before multiplying them. and cast O_i to the appropriate dtype before writing it to global memory.
+
+(c) Add a flag as the last argument to your autograd.Function implementation for causal masking.
+
+When set  to True, enables an index comparison for casual masking. Your Triton kernel should have a corresponding additional parameter is_causal: tl.constexpr.
+
+In Triton,construct appropriate index vectors for queries and keys, and compare them to form a square mask of size B_q x B_k.
+
+For elements that are masked out , add the constant value of -1e6 to the corresponding elements of the attention score matrix S. Make sure save the mask flag for backward using ctx.is_causal = is_causal.
+
+实现见
+`cs336_assignment2_codenote7_flashfwd.md`
