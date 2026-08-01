@@ -4,7 +4,6 @@ import torch
 from cs336_systems.flash_attention import FlashAttentionPytorch
 from cs336_systems.flash_attention_triton import FlashAttentionTriton
 
-
 def get_flashattention_autograd_function_pytorch() -> type:
     """
     Returns a torch.autograd.Function subclass that implements FlashAttention2.

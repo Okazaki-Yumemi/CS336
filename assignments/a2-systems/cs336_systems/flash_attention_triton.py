@@ -3,7 +3,7 @@ from __future__ import annotations
 import torch 
 import triton
 import triton.language as tl
-
+import math
 
 # 先搭Kernel 签名
 # 题目有写，直接照抄
@@ -178,8 +178,8 @@ def flash_fwd_kernel(
         logsumexp,
         boundary_check = (0,),
     )
-    
-        
+
+
 
 class FlashAttentionTriton(torch.autograd.Function):
     
@@ -250,7 +250,8 @@ class FlashAttentionTriton(torch.autograd.Function):
     
     @staticmethod
     def backward(ctx, grad_output: torch.Tensor):
-        raise NotImplementedError("Backward pass is not implemented in this assignment.")
+        raise NotImplementedError("Backward pass is not implemented yet.")
+        
     
 def flash_attention_triton(
     q: torch.Tensor,
