@@ -164,7 +164,7 @@ def flash_fwd_kernel(
             (K_TILE_SIZE, 0),
         )
     
-    output = acc / l[:, None] # shape = (Q_TILE_SIZE, D)
+    output = (acc / l[:, None]).to(q.dtype) # shape = (Q_TILE_SIZE, D)
     logsumexp = m + tl.log(l) # shape = (Q_TILE_SIZE,)
     
     tl.store(
@@ -384,22 +384,26 @@ def flash_bwd_kernel(
             dp - delta[:, None] 
         )
         
+        ds_dot = ds.to(q.dtype) 
+        p_dot = p.to(q.dtype)
+        
+        
         # dq_acc 当前tile的dQ累加
         dq_acc += tl.dot(
-            ds,
+            ds_dot,
             k,
             input_precision = "ieee",
         ) * scale
         
         # 当前 qk tile 对 dK,dV 的贡献
         dk_partial = tl.dot(
-            tl.trans(ds),
+            tl.trans(ds_dot),
             q,
             input_precision = "ieee",
         ) * scale
         
         dv_partial = tl.dot(
-            tl.trans(p),
+            tl.trans(p_dot),
             do,
             input_precision = "ieee",
         )
@@ -422,13 +426,13 @@ def flash_bwd_kernel(
         
         tl.atomic_add(
             dk_ptrs,
-            dk_partial,
+            dk_partial.to(k.dtype),
             mask = kv_mask,
         )
         
         tl.atomic_add(
             dv_ptrs,
-            dv_partial,
+            dv_partial.to(v.dtype),
             mask = kv_mask,
         )
         
@@ -444,7 +448,7 @@ def flash_bwd_kernel(
     
     tl.store(
         dQ_block_ptr,
-        dq_acc,
+        dq_acc.to(q.dtype),
         boundary_check = (0,1),
     )
     
