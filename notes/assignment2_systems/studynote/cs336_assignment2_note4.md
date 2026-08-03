@@ -144,3 +144,70 @@ Implement a naive form of distributed data parallel training that all-reduces in
 
 实现见
 `cs336_assignment2_codenote10_naiveddp.md`
+
+
+
+**Problem Naive DDP Benchmarking**:
+
+In this naive DDP implementation, parameter gradients are individually all-reduced across ranks after each backward pass.
+
+To better understand the overhead of data parallel training, create a script to benchmark your previously implemented language model when trained with this naive implementation of DDP.
+
+Measure the total time per training step and the proportion of time spent on communicating gradients. Collect measurements in the single-node setting.
+
+鉴于这个作业需要多卡运行，跳过。
+
+
+## 5.3 Improving Upon the Minimal DDP Implementation
+
+The minimal DDP implementation that we saw in section 5.2 has a couple of key limiations.
+
+1. It conducts a separate all-reduce operation for every parameter tensor. Each communication call incurs overhead, so it may be advantageous to batch communication calls to minimize this overhead, so it may be advantageous to batch communication calls to minimize this overhead.
+
+2. It waits for the backward pass to finish before communicating gradients. However, the backward pass is incrementally computed. Thus, when a parameter gradient is ready, it can immediately be communicated without waiting for the gradients of the other parameters. This allows us to overlap communication of gradients with computation of the backward pass, reducing the overhead of distributed data parallel training.
+
+### 5.3.1 Reducing the number of Communication calls.
+
+Rather than issuing a communication call for each parameter tensor, let's see if we can improve performance by batching the all-reduce.
+
+Concretely,we'll take the gradients that we want to all-reduce , concatenate them into a single tensor, and then all-reduce the combined gradients across all ranks.
+
+**Problem: Minimal DDP with Flat Gradients**:
+
+
+```py
+
+
+class FlatDDP(NaiveDDP):
+    
+    def synchronize_gradients(self) -> None:
+        world_size = dist.get_world_size()
+        
+        gradients = [parameter.grad for parameter in self.module.parameters() if parameter.grad is not None]
+        
+        if not gradients:
+            return
+
+        flat_gradients = _flatten_dense_tensors(gradients)
+        
+        dist.all_reduce(
+            flat_gradients,
+            op = dist.ReduceOp.SUM,
+            async_op = False,
+        )
+        
+        flat_gradients.div_(world_size) #type: ignore
+        
+        synchronized_gradients = _unflatten_dense_tensors(flat_gradients, gradients)
+        
+        for original_gradient, synchronized_gradient in zip(
+            gradients,
+            synchronized_gradients,
+            strict = True,
+        ):
+            original_gradient.copy_(
+                synchronized_gradient
+        )
+```
+
+adapter测试时间提升了，可能是因为静态验证无法反映时间。
