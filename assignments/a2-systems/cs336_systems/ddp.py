@@ -6,6 +6,11 @@ import torch
 import torch.distributed as dist
 from torch import nn
 
+from torch._utils import (
+    _flatten_dense_tensors,
+    _unflatten_dense_tensors
+)
+
 
 class NaiveDDP(nn.Module):
     
@@ -47,5 +52,37 @@ class NaiveDDP(nn.Module):
             )
             
             parameter.grad.div_(world_size) #type: ignore
+            
+
+class FlatDDP(NaiveDDP):
+    
+    def synchronize_gradients(self) -> None:
+        world_size = dist.get_world_size()
+        
+        gradients = [parameter.grad for parameter in self.module.parameters() if parameter.grad is not None]
+        
+        if not gradients:
+            return
+
+        flat_gradients = _flatten_dense_tensors(gradients)
+        
+        dist.all_reduce(
+            flat_gradients,
+            op = dist.ReduceOp.SUM,
+            async_op = False,
+        )
+        
+        flat_gradients.div_(world_size) #type: ignore
+        
+        synchronized_gradients = _unflatten_dense_tensors(flat_gradients, gradients)
+        
+        for original_gradient, synchronized_gradient in zip(
+            gradients,
+            synchronized_gradients,
+            strict = True,
+        ):
+            original_gradient.copy_(
+                synchronized_gradient
+        )
             
             
