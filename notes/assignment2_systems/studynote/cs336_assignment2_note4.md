@@ -211,3 +211,158 @@ class FlatDDP(NaiveDDP):
 ```
 
 adapter测试时间提升了，可能是因为静态验证无法反映时间。
+
+
+### 5.3.2 Overlapping Communication with Communication of Individual Parameter Gradients
+
+While batching the communication calls might help lower the overhead associated with issuing a large number of small all-reduce operations, all of the communication time still directly contributes to the overhead.
+
+To resolve this, we can take advantage of the observation that the backward pass incrementally computes gradients for each layer (starting from the loss and moving toward the input). —— thus, we can all-reduce parameter gradients as soon as they're ready, reducing the overhead of data parallel training by overlapping computation of the backward pass with communication of gradients.
+
+
+we'll start by implementing and benchmarking a distributed data parallel wrapper that asynchronously all-reduces individual parameter tensors as they become ready during the backward pass.
+
+**Backward hooks**: To automatically call a function on a parameter after its gradient has been accumulated in the backward pass,you can use register_post_accumulate_grad_hook function.
+
+**Asynchronous communication**: All PyTorch collective communication operations support synchronous (async_op=False) and asynchronous execution (async_op=True). Synchronous calls will block until the collective operation is queued on the GPU. This does not mean that the CUDA operation is completed since CUDA operations are asynchronous. That being said, later function calls using the 
+output will behave as expected. In contrast, asynchronous calls will return a distributed request handle—as a result, when the function returns, the collective communication operation is not guaranteed to have been queued on the GPU, let alone completed. To wait for the operation to be queued on the GPU (and therefore for the output to be usable in later operations), you can call handle.wait() on the returned communication handle.
+
+```py
+
+tensors = [torch.rand(5) for _ in range(10)]
+
+# Synchronous, block until operation is queued on the GPU
+for tensor in tensors:
+    dist.all_reduce(tensor, async_op=False)
+
+# Asynchronous, return a immediately after each call and wait on results at the end
+handles = []
+for tensor in tensors:
+    handle = dist.all_reduce(tensor, async_op=True)
+    handles.append(handle)
+
+# ...
+# Possibly execute other commands that don't rely on the all_reduce results
+# ...
+
+# Ensure that all_reduce calls were queued and therefore other operations depending on the all-reduce output can be queued.
+
+for handle in handles:
+    handle.wait()
+
+handles.clear()  # Clear the list of handles to free memory
+
+```
+
+
+
+**Problem: DDP with Overlapping Communication**:
+
+Implement a Python class to handel distributed data parallel training. The class warp an arbitrary PyTorch nn.Module and take care of broadcasting the weights before training (so all ranks have the same initial parameters) and issuing communication calls for gradient averaging.
+
+We recommend the following public interface:
+
+```py
+
+def __init__(slef, module: torch.nn.Module):
+
+# Given an instantiated PyTorch nn.Module to be parallelized , construct a DDP container that will handle gradient synchronization across ranks
+
+def forward(self, *inputs, **kwargs):
+
+# Calls the warpped module's forward method with the provided positional and keyword arguments.
+
+def finish_gradient_synchronization(self):
+
+# When called , wait for asynchronous communication calls to finish on the GPU
+```
+
+To use this class to perform distributed training, we'll pass it a module to warp, and then add a call to finish_gradient_synchronization() before we run optimizer.step() to ensure that all gradients have been synchronized across ranks.
+
+
+```py
+
+model = ToyModel().to(device)
+
+ddp_model = DDP(model)
+
+for _ in range(train_steps):
+    x, y = get_batch()
+    logits = ddp_model(x)
+    loss = loss_fn(logits, y)
+    loss.backward()
+    ddp_model.finish_gradient_synchronization()
+    optimizer.step()
+```
+
+
+代码
+
+```py
+
+class OverlappingDDP(nn.Module):
+    
+    def __init__(self, module: nn.Module) -> None:
+        
+        super().__init__()
+        self.module = module
+        
+        self.world_size = dist.get_world_size()
+        
+        # 保存通信，每项保存 (handle,parameter) 的元组
+        self.pending_communications = []
+        
+        #注册 hook_handles:
+        self.hook_handles: list = []
+        
+        with torch.no_grad():
+            for parameter in self.module.parameters():
+                dist.broadcast(parameter, src=0)
+            
+            for buffer in self.module.buffers():
+                dist.broadcast(buffer, src=0)
+        
+        for parameter in self.module.parameters():
+            if parameter.requires_grad == False:
+                continue
+            
+            #增加当前参数的hook
+            self.hook_handles.append(
+                parameter.register_post_accumulate_grad_hook(self._create_hook(parameter))
+                )
+
+    # 梯度hook
+    def _create_hook(self, parameter: torch.Tensor):
+        def hook(_: torch.Tensor) -> None:
+            if parameter.grad is None:
+                return
+
+            handle = dist.all_reduce(
+                parameter.grad,
+                op=dist.ReduceOp.SUM,
+                async_op=True,
+            )
+            
+            self.pending_communications.append((handle, parameter))
+
+        return hook
+    
+    def finish_gradient_synchronization(self) -> None:
+        
+        for handle, parameter in self.pending_communications:
+            handle.wait()
+            
+            parameter.grad.div_(self.world_size)
+        
+        self.pending_communications.clear()
+        
+    def forward(
+        self,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Any:
+        
+        return self.module(*args, **kwargs)
+```
+
+梯度ready之后立马异步 all-reduce，等到 finish_gradient_synchronization() 时再等待所有通信完成。
