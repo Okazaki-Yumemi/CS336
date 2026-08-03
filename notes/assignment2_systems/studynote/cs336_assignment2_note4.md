@@ -119,3 +119,28 @@ Deliverable: Plots and / or table comparing the various settings, with 2-3 sente
 
 实现见
 `cs336_assignment2_codenote9_multiprocessingbenchmarking.md`
+
+## 5.2 A naive implementation of Distributed Data Parallel Training
+
+We've seen the basics of writing distributed applications in PyTorch, let's build a minimal implementation of distributed data parallel training.
+
+Data parallelism splits batches across multiple devices, enabling training on large batch sizes that do not fit on a single device.
+
+
+Here are the steps for naively doing distributed data parallel training. Initally , each device constructs a (randomly initialized) model.
+
+We use the broadcast collective communication operation to send the model parameters from rank 0 to all other ranks.
+
+At the start of training, each device holds an identical copy of the model parameters and optimizer states.
+
+1. Given a batch with n examples, the batch is shared and each device receives n/d disjoint examples. (where d is the number of devices used for data parallel training)  d should devide n,otherwise some ranks would do more work than others, and the step is bottlenecked by slowest.
+2. Each device uses its local copy of the model parameters to run a forward pass on its n/d examples and a backward pass to calculate the gradients. Note that at this point, each device holds the gradients computed from the n/d examples it processed.
+3. We then use the all-reduce collective communication operation to sum the gradients to average the gradients across the different devices, so each device holds the gradients averaged across all n examples.
+4. Next, each device runs an optimizer step to update its copy of the parameters—— from the optimizer's perspective, it is simply optimizing a local model. The parameters and optimizer states will stay in sync on all of the different devices since they all start from the same initial model and optimizer state, and use the same averaged gradients for each iteration. At this point, we've completed a single training iteration and can repeat the process.
+
+**Problem Naive DDP**:
+
+Implement a naive form of distributed data parallel training that all-reduces individual parameter gradients after the backward pass.
+
+实现见
+`cs336_assignment2_codenote10_naiveddp.md`
