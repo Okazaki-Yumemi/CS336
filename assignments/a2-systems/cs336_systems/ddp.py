@@ -86,3 +86,67 @@ class FlatDDP(NaiveDDP):
         )
             
             
+class OverlappingDDP(nn.Module):
+    
+    def __init__(self, module: nn.Module) -> None:
+        
+        super().__init__()
+        self.module = module
+        
+        self.world_size = dist.get_world_size()
+        
+        # 保存通信，每项保存 (handle,parameter) 的元组
+        self.pending_communications = []
+        
+        #注册 hook_handles:
+        self.hook_handles: list = []
+        
+        with torch.no_grad():
+            for parameter in self.module.parameters():
+                dist.broadcast(parameter, src=0)
+            
+            for buffer in self.module.buffers():
+                dist.broadcast(buffer, src=0)
+        
+        for parameter in self.module.parameters():
+            if parameter.requires_grad == False:
+                continue
+            
+            #增加当前参数的hook
+            self.hook_handles.append(
+                parameter.register_post_accumulate_grad_hook(self._create_hook(parameter))
+                )
+
+    # 梯度hook
+    def _create_hook(self, parameter: torch.Tensor):
+        def hook(_: torch.Tensor) -> None:
+            if parameter.grad is None:
+                return
+
+            handle = dist.all_reduce(
+                parameter.grad,
+                op=dist.ReduceOp.SUM,
+                async_op=True,
+            )
+            
+            self.pending_communications.append((handle, parameter))
+
+        return hook
+    
+    def finish_gradient_synchronization(self) -> None:
+        
+        for handle, parameter in self.pending_communications:
+            handle.wait()
+            
+            parameter.grad.div_(self.world_size)
+        
+        self.pending_communications.clear()
+        
+    def forward(
+        self,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Any:
+        
+        return self.module(*args, **kwargs)
+            

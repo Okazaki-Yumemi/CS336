@@ -3,7 +3,7 @@ from __future__ import annotations
 import torch
 from cs336_systems.flash_attention import FlashAttentionPytorch
 from cs336_systems.flash_attention_triton import FlashAttentionTriton
-from cs336_systems.ddp import NaiveDDP,FlatDDP
+from cs336_systems.ddp import NaiveDDP,FlatDDP,OverlappingDDP
 
 def get_flashattention_autograd_function_pytorch() -> type:
     """
@@ -52,7 +52,7 @@ def get_ddp(module: torch.nn.Module) -> torch.nn.Module:
         Instance of a DDP class.
     """
     # For example: return DDP(module)
-    return FlatDDP(module)
+    return OverlappingDDP(module)
 
 
 def ddp_on_after_backward(ddp_model: torch.nn.Module, optimizer: torch.optim.Optimizer):
@@ -68,7 +68,7 @@ def ddp_on_after_backward(ddp_model: torch.nn.Module, optimizer: torch.optim.Opt
     """
     # For example: ddp_model.finish_gradient_synchronization()
     del optimizer  # unused
-    ddp_model.synchronize_gradients() #type: ignore
+    ddp_model.finish_gradient_synchronization() #type: ignore
 
 
 def get_fsdp(module: torch.nn.Module, compute_dtype: torch.dtype | None = None) -> torch.nn.Module:
