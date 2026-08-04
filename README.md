@@ -37,12 +37,18 @@ CS336-2026/
 - [x] BPE training speed test
 - [x] Tokenizer implementation
 - [x] Transformer components
-- [ ] Language-model training
-- [ ] Profiling and benchmarking
+- [x] Language-model training
+- [x] Profiling and benchmarking
 
 ### Assignment 2: Systems
 
-- [ ] Not started
+- [x] Profiling and benchmarking
+- [x] Single-GPU memory
+- [x] GPU-Kernels
+- [x] Distributed data parallel Training
+- [ ] Optimization State Sharding
+- [ ] Fully shared Data Parallel
+- [ ] Analyzing Parallelism Strategies
 
 ### Assignment 3: Scaling
 
