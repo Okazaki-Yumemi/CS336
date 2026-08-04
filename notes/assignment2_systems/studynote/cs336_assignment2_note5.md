@@ -167,3 +167,86 @@ local_group["params"] = local_params
 
 
 step() 只更新本rank的参数，然后广播更新后的参数
+
+**Problem**: Optimizer state Sharding Accounting
+(a) Create a script to profile the peak memory usage when training language models with and without optimizer state sharding. Using the standard configuration(1 node, 2 GPUs, xl model size), report the peak memory usage after model initialization.
+
+(b) How does our implementation of optimizer state sharding affect training speed? Measure the time taken per iteration with and without optimizer state sharding for the standard configuration(1 node, 2 GPUs, xl model size).
+
+(c) How does our approach to optimizer state sharding differ from ZeRO stage 1
+(described as ZeRO-DP $P_{os}$ in the paper)
+
+
+## 1.先定义参数内存P
+```
+vocab_size = 10000
+d_model = 2560
+d_ff = 10240
+num_layers = 32
+```
+
+参数数量:
+
+$$ N_{params} = 2VD + L(4D^2 + 3D D_{ff} + 2D) + D $$
+
+代入
+
+$$ N_{params} = 3.4068 x 10^9$$
+
+3.41B参数
+
+假设全部是FP32, 大小为 12.69GiB
+
+## 2.AdamW 到底保存了什么
+
+| 内容            |    每个参数 |
+| ------------- | ------: |
+| 模型参数 (\theta) | 4 bytes |
+| 梯度 (g)        | 4 bytes |
+| 一阶矩 (m)       | 4 bytes |
+| 二阶矩 (v)       | 4 bytes |
+
+所以AdamW 稳定持久内存为 4P
+
+参数、梯度和两个 optimizer states
+
+## 3.三个时间点的内存为什么不同
+
+PyTorch AdamW 的 optimizer state 通常是惰性初始化的，构造optimizer 时不会立即分配 m和v，而是第一次step() 的时候创建。
+
+因此题目才要求在模型初始化之后测量内存峰值，而不是在第一次step()之后。
+
+
+初始化后只有完整模型参数，理论为 12.69GiB
+
+第一次optimizer step之前，forward 和 backward 已经完成，拥有完整参数和梯度
+
+大小为 2P = 25.38GiB
+
+第一次 optimizer step 之后，创建2个states，大小为 4P = 50.76GiB
+
+而双卡的话，每个rank只保存一半 optimizer state, 每个rank的内存是 P + P + 2P/2 = 3P = 38.07GiB
+
+| 每个 rank          |    参数 |    梯度 | Adam states |        合计 |
+| ---------------- | ----: | ----: | ----------: | --------: |
+| 普通 AdamW         | 12.69 | 12.69 |       25.38 | 50.77 GiB |
+| 双卡 sharded AdamW | 12.69 | 12.69 |       12.69 | 38.07 GiB |
+
+一般化到N个rank
+
+Moss = P + P + 2P/N 当 P -> ∞，最小还是2P
+
+
+## 4.与 ZeRO Stage 1 的主要差异
+
+分片粒度是整个parameter
+
+如果参数差异很大，即使每张卡分到相同的参数数量，内存占用也可能不均衡
+
+我们的是逐参数broadcast
+
+ZeRO Stage 1  通常会将更新后的参数shard 进行 bucketed/coalesced all-gather,而不是每个参数单独发一个collective
+
+工业ZeRO还有bucket\异步\通信调度
+
+- flatten optimizer states..
