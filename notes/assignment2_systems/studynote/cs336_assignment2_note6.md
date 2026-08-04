@@ -410,3 +410,55 @@ post-accumulate grad hook
 finish_gradient_synchronization
     等待异步通信，将 local grad 交给 optimizer
 ```
+
+
+用一层 Linear看的例子
+```
+调用 linear(x)
+
+1. PyTorch 自动调用 forward_pre_hook
+   → all-gather 完整 weight
+
+2. PyTorch 调用 linear.forward(x)
+   → 得到 output
+
+3. PyTorch 自动调用 forward_hook
+   → 恢复 local shard
+
+
+调用 loss.backward()
+
+4. 反向传播到达 Linear
+   → 自动调用 full_backward_pre_hook
+   → 再次 all-gather 完整 weight
+
+5. autograd 计算：
+   grad_input
+   grad_weight
+
+6. grad_weight 累积进 parameter.grad 后
+   → 自动调用 post_accumulate_grad_hook
+   → reduce-scatter
+   → 恢复 local weight shard
+
+7. finish_gradient_synchronization()
+   → 等待异步通信完成
+   → 设置 local shard.grad
+
+8. optimizer.step()
+   → 更新 local weight shard
+```
+
+
+**Problem FSDP accounting**
+(a) how much memory do you expect to save from the peak by implementing FSDP?
+You can ignore the size of the preallocated buffers needed to all-gather weights to each GPU in your calculation
+(b) Profile the xl model on two GPUs and pay attention to the all-gather of weights.Does the communication finish in time for the forward pass?
+
+(a) Moss = 2P + 2P/N  
+
+额外节省为 2P(1 - 1/N) = 2P(N-1)/N 
+
+带入双卡xl模型，为每张GPU 12.69GiB
+
+(b) 当前同步 hook 实现中的 all-gather 位于每个 Linear/Embedding forward 的 critical path，因此当前层计算会等待通信完成，不能达到题目所期望的通信隐藏效果。要完成该实验，需要在双 GPU 环境下加入异步两层预取，然后使用 Nsight 比较 NCCL all-gather 的结束时间和相应层 GEMM 的开始时间。
