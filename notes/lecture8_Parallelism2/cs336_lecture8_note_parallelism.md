@@ -66,3 +66,4 @@ Split up backwards into two parts.
 # Recap: LLM parallelism table
 
 ![alt text](image-6.png)
+
