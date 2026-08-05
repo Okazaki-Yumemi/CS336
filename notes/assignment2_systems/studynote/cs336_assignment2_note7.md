@@ -150,3 +150,154 @@ Ring All-reduce 是 2(N_DP-1)/N_DP * S / W seconds
 后层 grad all-reduce:          [communication.......]
 前层 backward：                [compute..............]
 ```
+
+
+最终拿到的数据是 T_compute = 12BDD_FF / NdpC   T_communication = 12(N_DP - 1) D Dff / NdpW
+
+设Tcommunication <= T_compute，解得 N_dp <= 1+ BW/C
+
+- B 越大：每一步有更多计算，可以容纳更多 DP 设备；
+- W 越大：网络越快，可以容纳更多设备；
+- C 越大：GPU 算得越快，通信相对更容易成为瓶颈，因此可有效使用的 DP 设备反而更少。
+
+## 8.3 Analyzing Fully Shared Data Parallel.
+
+**FSDP 和 DP 的关键区别**:
+
+DP中，每张设备长期保存完整权重
+
+```
+rank 0 : 完整 w1、w2、w3
+rank 1 : 完整 w1、w2、w3
+...
+```
+
+FSDP中，权重被分片
+
+W(i)_k 表示设备i持有wk的一个shard，每个shard大小约为 DDff/N_FSDP
+
+```
+rank 0 : W1 的前一半
+rank 1 : W1 的后一半
+```
+
+
+但这里有一个区别
+
+FSDP不是tensor parallel, 矩阵乘法执行的时候，仍然需要完整权重。
+
+计算前需要
+```
+各个rank 的 weight shards
+       |all gather
+       v
+每个rank得到完整的weight
+       |
+       v
+执行普通的batch-sharded matmul
+```
+
+FSDP只改变权重的长期存储方式，不改变单次矩阵乘法本身
+
+**Forward发生什么**:
+
+输入batch 切开，计算前需要恢复完整权重
+
+W1 = all-gather(W1_shard)  W2 = all-gather(W2_shard)  W3 = all-gather(W3_shard)
+
+每个rank对自己的batch shard做普通forward
+```
+all-gather W1 -> 使用W1 -> 丢弃W1
+all-gather W2 -> 使用W2 -> 丢弃W2
+all-gather W3 -> 使用W3 -> 丢弃W3
+```
+
+
+Forward计算和 DP完全相同，为 6BDDff / N_FSDP FLOPs
+
+**backward 发生什么**:
+
+forward之后为了节约显存，完整的权重已经被释放，只保留local shard
+
+但是backward计算dx还需要权重，所以backward 前必须再次 all-gather
+
+W1 W2 W3  <—— all gather
+
+每个rank对自己的batch shard做普通backward，计算出局部权重梯度
+
+但是每个rank最终只长期保存 W1 的一个shard，因此不需要完整全局 dW1
+
+
+dW(i)1 = reduce-scatter({dW(r)1,local})
+
+```
+每个 rank：
+    有完整形状的局部 dW
+
+reduce-scatter：
+    先跨 rank 求和
+    再把最终梯度切成 shard
+
+结果：
+    每个 rank 只得到自己负责的 gradient shard
+```
+
+Backward计算和DP一样，为   12BDDff / N_FSDP FLOPs
+
+**Forward通信时间**:
+
+三个权重每个含 DDff 个FP16， 所以大小Sw = 2DDff
+
+一次ring all-gather 需要 Nfsdp-1/Nfsdp * Sw / W 
+
+三个权重就是三倍，所以总计  6(N_FSDP-1)/N_FSDP * DDff / W
+
+**backward通信时间**:
+
+重新all gather权重，为 6(N_FSDP-1)/N_FSDP * DDff / W
+
+reduce-scatter梯度:， 三个梯度，每个也是2DDff bytes，一次reduce-scatter 与 一次 all-gather 的ring时间相同，三个梯度的reduce-scatter总计 6(N_FSDP-1)/N_FSDP * DDff / W
+
+总计 12(N_FSDP-1)/N_FSDP * DDff / W
+
+
+**对比**:
+
+FSDP 的backward 和 DP的backward结果刚刚好，因为DP backward 使用一次完整gradient all-reduce = reduce-scatter + all-gather
+而FSDP
+```
+weight all-gather
++
+gradient reduce-scatter
+```
+
+通信时间刚好相同，但是要注意语义不同
+```
+DP：
+    权重本来完整
+    梯度需要 all-reduce
+
+FSDP：
+    权重需要 all-gather
+    梯度只需要 reduce-scatter
+```
+
+**Forward 的边界**
+
+Tcomm <= Tcompute 得到  Nfsdp <= 1 + BW/C
+
+**backward 的边界**
+Tcomm <= Tcompute 得到  Nfsdp <= 1 + BW/C
+
+| 项目              | DP                  | FSDP                                        |
+| --------------- | ------------------- | ------------------------------------------- |
+| batch           | 分片                  | 分片                                          |
+| weight          | 每卡完整                | 长期分片，计算前 gather                             |
+| gradient        | 每卡完整                | 分片                                          |
+| optimizer state | 每卡完整                | 分片                                          |
+| forward 通信      | 无                   | weight all-gather                           |
+| backward 通信     | gradient all-reduce | weight all-gather + gradient reduce-scatter |
+| 每卡计算量           | 除以 (N)              | 除以 (N)                                      |
+
+>FSDP 与 DP 的计算量相同；它通过把参数、梯度和 optimizer state 分片来省显存，但代价是 forward 和 backward 都需要临时 all-gather 权重。
+而且整个训练 step 的通信量实际上比 DP 更多.
