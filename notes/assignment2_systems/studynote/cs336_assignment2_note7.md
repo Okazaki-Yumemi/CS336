@@ -301,3 +301,136 @@ Tcomm <= Tcompute 得到  Nfsdp <= 1 + BW/C
 
 >FSDP 与 DP 的计算量相同；它通过把参数、梯度和 optimizer state 分片来省显存，但代价是 forward 和 backward 都需要临时 all-gather 权重。
 而且整个训练 step 的通信量实际上比 DP 更多.
+
+## 8.4 Analyzing Tensor Parallel
+
+前面的 DP/FSDP 都是: 每张设备处理不同的数据，但某一次矩阵乘法仍然由单张设备完整完成。
+
+Tensor Parallelism (TP 张量并行) 则进一步把一个矩阵乘法拆到多张设备上:
+
+> 每张设备只持有权重矩阵的一部分，计算自己负责的输出激活，然后把激活拼接起来得到完整输出。
+
+```
+FSDP:
+  权重平时分片
+  计算前 all-gather 成完整权重
+  每张设备执行完整matmul
+
+TP:
+  权重分配后不重新拼完整
+  每张设备直接用自己的权重 shard 做一部分 matmul
+```
+
+考虑 x (B, D) W (D, Dff) 目的计算 y = xW
+
+Column Parallel: 按输出维度切:  
+
+把W列切开 W = [W0,W1...] 形状: W(i) (D, Dff/N_TP)
+
+每个设备拿到完整的 x, 计算 y(i) = x W(i) 形状: (B, Dff/N_TP)
+
+然后沿着最后一个维度 concat
+
+因此， xW = all-gather({xW(i)})
+
+
+Row Parallel: 按输入维度切:
+
+把W的行切开 W = [W0,W1...]T 形状: W(i) (D/N_TP, Dff)
+
+输入维度被切开，x也得切开 x = [x0,x1...]T 形状: x(i) (B, D/N_TP)
+
+然后计算 yi = x(i) W(i) 形状: (B, Dff)
+
+然后 all-reduce({yi}) 得到最终输出 y = sum(yi)
+
+**为什么FFN要把两种分片配在一起**:
+
+SwiGLU FFN是 
+```
+
+x1 = xW1
+X2 = xW2
+z = f(x1) * x2
+Y = zW3
+```
+
+讲义选择 W1\ W2 按照 column parallel， W3 按照 row parallel
+
+W1，W2 按照列切，每个rank得到的 x1, x2 形状都是 B x Dff/N_TP, 于是本地就能计算 z，不需要all-gather
+
+W3 按照row切
+
+W3 (DFF/N_TP, D)  Z 刚好是(B , DFF/N_TP) ，所以可以直接算，然后所有rank的结果相加。最后使用一次all-reduce
+
+**为什么中间不需要all-gather**:
+
+column parallel后，要把输出 shards all-gather
+
+但是这下一层W3 是 row parallel，它本来就只需要对应的activation shard
+
+
+**forward阶段**
+
+rank 0 拿走 w1 w2 的前半列，w3的上半行。 rank 1 拿走 w1 w2 的后半列，w3的下半行。
+
+
+**backward怎么推**:
+
+给定完整上游梯度 (B,D) 
+
+由于forward最后的y在所有rank上完整复制，所以每个rank都有完整的dy.
+
+先经过W3,然后SwiuGLU门控，得到dx1, dx2, dz,最后计算W1 W2的梯度。
+
+这里全程不需要通信，因为它们对应的就是 shard的完整梯度
+
+**计算输入梯度**:
+
+每张设备只能得到一部分贡献，需要对 dx进行all-reduce
+
+TP的权重梯度不需要同步，因为他们并不是计算同一个参数的不同局部贡献，而是在计算不同参数的shard的梯度。
+
+**计算量 accounting**:
+
+每张卡只保存 1/N_TP的权重，计算量也缩小为 1/N_TP
+
+Forward  6BDDff / N_TP FLOPs
+
+backward 12BDDff / N_TP FLOPs
+
+**通信量**:
+
+TP通信的是activation,不是整个权重或者权重梯度
+
+forward 的 all-reduce tensor:  y (B,D)  
+
+FP16的大小: S = 2BD bytes
+
+Ring all-reduce 需要 2(N_TP-1)/N_TP * S / W seconds
+
+则
+Tcomm fwd = 2(N_TP-1)/N_TP * 2BD / W
+Tcomm bwd = 2(N_TP-1)/N_TP * 2BD / W
+
+**边界计算**:
+
+Tcompute,fwd = 6BDDff / N_TP C
+通信
+Tcomm,fwd = 4(N_TP-1)/N_TP * BD / W
+
+得到 Ntp <= 1 + 3DffW / (2C)
+
+backward
+Ntp <= 1 + 3DffW / (C)
+
+所以 forward 通常更容易先成为 TP 的通信瓶颈
+
+| 方式   | 切什么        | 通信什么                     |
+| ---- | ---------- | ------------------------ |
+| DP   | batch      | weight gradients         |
+| FSDP | batch和模型状态 | weights、weight gradients |
+| TP   | 单个权重矩阵的维度  | activations              |
+
+Tensor Parallelism 不像 FSDP 那样在计算前恢复完整权重，而是让各 rank 直接对权重 shard 执行部分矩阵乘法；通过把 column-parallel 层和 row-parallel 层配对，可以让中间 activation 一直保持分片，只在 FFN 的入口/出口附近进行少量 all-reduce。
+
