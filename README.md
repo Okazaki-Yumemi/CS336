@@ -46,8 +46,8 @@ CS336-2026/
 - [x] Single-GPU memory
 - [x] GPU-Kernels
 - [x] Distributed data parallel Training
-- [ ] Optimization State Sharding
-- [ ] Fully shared Data Parallel
+- [x] Optimization State Sharding
+- [x] Fully shared Data Parallel
 - [ ] Analyzing Parallelism Strategies
 
 ### Assignment 3: Scaling
