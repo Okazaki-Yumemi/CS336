@@ -434,3 +434,153 @@ Ntp <= 1 + 3DffW / (C)
 
 Tensor Parallelism 不像 FSDP 那样在计算前恢复完整权重，而是让各 rank 直接对权重 shard 执行部分矩阵乘法；通过把 column-parallel 层和 row-parallel 层配对，可以让中间 activation 一直保持分片，只在 FFN 的入口/出口附近进行少量 all-reduce。
 
+## 8.5 2D parallelism = FSDP + TP
+
+- FSDP 沿着 batch / data-parallel 轴拓展
+- TP 沿着 模型维度轴拓展
+- 两个轴组合成一个二维设备网络
+
+F = N_FSDP,  T = N_TP
+
+总设备数为 N = FT
+
+例如F = 2 T = 3 一共6张卡
+
+```
+             TP rank i
+                0         1         2
+FSDP rank 0   (0,0)     (1,0)     (2,0)
+FSDP rank 1   (0,1)     (1,1)     (2,1)
+```
+
+- 同一行：相同 FSDP rank，不同 TP rank，执行 TP activation all-reduce；
+- 同一列：相同 TP rank，不同 FSDP rank，执行 FSDP weight all-gather。
+
+**权重怎么切？**
+原始SwiGLU权重
+
+W1, W2  DxDff
+
+W3 Dff x D
+
+W1,W2 先按照TP的列
+
+D x Dff/T
+
+FSDP再沿着另外一个维度
+
+W(i,j)1 , W(i,j)2 属于 D/F x Dff/T
+
+w3 先按照TP的行
+Dff/T x D
+
+FSDP再沿着另外一个维度
+
+W(i,j)3 属于 Dff/T x D/F
+
+因此每个设备只保存 1/FT 的完整权重
+
+**Forward怎么运行**:
+
+FSDP先切batch
+
+第j个FSDP rank拿到  xj = (B/F, D)  batch shard
+
+对于固定的TP rank i , 不同FSDP rank 先 all-gather 权重
+
+gather之后得到的不是完整W，而是一个完整TP shard
+
+W(i)1 , W(i)2 属于 D x Dff/T
+W(i)3 属于 Dff/T x D
+
+然后执行TP forward
+
+x(i,j) = xjW(i)1
+x(i,j) = xjW(i)2
+z(i,j) = f(x(i,j)) * x(i,j)
+y(i,j) = z(i,j)W(i)3
+
+沿着TP轴 all-reduce
+
+y(j) = all-reduce({y(i,j)})
+
+```
+FSDP 轴：
+    gather 每个 TP weight shard
+
+每张设备：
+    用局部 batch × TP weight shard 做部分计算
+
+TP 轴：
+    all-reduce activation 部分和
+```
+
+**Forward计算量**：
+
+6BDDff / FT FLOPs
+
+时间为 Tcompute = 6BDDff / FTC
+
+FSDP和 TP分别贡献了一个缩放因子
+
+**Forward通信量**：
+FSDP轴，按照FP16计算，在F个设备上执行ring all-gather
+
+TP切分之后，一个rank需要gather的 TP weight shards有三个，总共 3DDff/T FP16元素
+
+
+每个元素2 bytes，总大小为 6DDff/T bytes
+
+F个设备上执行ring all-gather，时间为 6(F-1)/F * DDff / TW
+
+TP轴:
+
+局部输出 activation的形状是 B/F x D
+
+FP16大小为 Stp = 2BD/F bytes
+
+ring all-reduce 时间为 2(T-1)/T * Stp / W = 4(T-1)/T * BD / FW
+
+所以通信的时间为
+
+Tcomm = max(6(F-1)/F * DDff / TW, 4(T-1)/T * BD / FW)
+
+**两个轴重叠时，上界分析**:
+FSDP轴约束
+F <= 1 + BW/C
+
+TP轴约束
+
+T <= 1 + 3DffW / (2C)
+
+
+所以
+N = FT <= (1 + BW/C)(1 + 3DffW / (2C))
+
+FSDP的扩展能力由batch支持，TP的扩展能力由模型宽度支撑，Nmax = FmaxTmax
+
+**不能重叠的时候**
+
+T = Tfsdp + Ttp
+
+为 [6(F-1)DDff + 4(T-1)BD] / FTW
+
+是不等式分析问题。
+
+不能重叠大约会让可扩展设备数降为 1/4
+
+**总结**
+
+```
+FSDP 轴：
+    切 batch
+    分片模型状态
+    通信 weights / weight gradients
+
+TP 轴：
+    切单个矩阵乘法
+    通信 activations
+
+总设备数：
+    N = NFSDP × NTP
+```
