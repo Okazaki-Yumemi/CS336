@@ -52,7 +52,7 @@ CS336-2026/
 
 ### Assignment 3: Scaling
 
-- [ ] Not started
+- [x] Finished. (Partially, due to lack of compute resources)
 
 ### Assignment 4: Data
 
