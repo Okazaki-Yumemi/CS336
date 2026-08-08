@@ -184,3 +184,22 @@ Language: zh, Confidence: 0.9797539114952087
 Language: zh, Confidence: 0.9934940934181213
 Language: fr, Confidence: 0.9906957149505615
 ```
+
+
+
+## 2.4 Personally identifiable information.
+
+The web contains large quantities of information that can be used to reach or identify individuals. Such as email addresses . phone numbers, IP address.
+
+We might not want a user-facing language model to output such information about real people, and a common step is to mask out these pieces of information in the training dataset.
+
+**Problem: Personally identifiable information**:
+
+(a) Write a function to mask out emails. Your function will take a string as input, and replace all instances of email addresses with the string "|||EMAIL_ADDRESS|||". To detect email addresses, you can look up regular expressions that do this reliably.
+> 见codenote3
+(b) Write a function to mask out phone numbers. Your function will take a string as input, and replace all instances of phone numbers with the string "|||PHONE_NUMBER|||". Doing this reliably can be extremely challenging, as phone numbers might be written in an extremely diverse set of formats, but you should try to capture at least the most common phone number formats used in the United States, and be robust to minor syntactic deviations.
+> 见codenote3
+(c) Write a function to mask out IP addresses. For this problem, it is enough to focus on IPv4 addresses (4 numbers up to 255 separated by points). Your function will take a string as input, and replace all instances of IP addresses with the string "|||IP_ADDRESS|||".
+> 见codenote3
+(d) What problems do you think might arise downstream in a language model when these filters are naïvely applied on the training set? How might you mitigate these issues?
+(e)  Run your PII masking functions on text extracted from the WARC files (via your previouslyimplemented text extraction function). Look through 20 random examples where a replacement was made; give some examples of false positives and false negatives.
