@@ -203,3 +203,21 @@ We might not want a user-facing language model to output such information about 
 > 见codenote3
 (d) What problems do you think might arise downstream in a language model when these filters are naïvely applied on the training set? How might you mitigate these issues?
 (e)  Run your PII masking functions on text extracted from the WARC files (via your previouslyimplemented text extraction function). Look through 20 random examples where a replacement was made; give some examples of false positives and false negatives.
+
+
+## 2.5 Harmful content
+
+Unfiltered dumps from the Web Contain a large volume of text that we would not want a language model to repeat during inference.
+
+Some of these training examples can come even surprisingly from generally harmless websites such as Wikipedia —— for instance, comments left by users on several pages can be rather toxic.
+Although it is essentially impossible to establish a clear line around what is harmful , many data filtering pipelines still do some filtering of pages that contain mostly harmful content.
+
+There are many approaches for identifying such content, including counting  words from a ban list, or building simple classifiers on labels given by human raters. In this part of the assginment, we will focus on identifying two broad categories of harmful content "Not safe for work", and toxic speech.
+
+We will use the fasttext pre-trained models made available by the dolma project to judge whether or not an input piece of text belongs to either of these categories.
+
+**Problem: Harmful content**
+(a) Write a function to detect NSFW content.
+(b) Write a function to detect toxic speech.
+(c) What problems do you think might arise downstream in a language model when these filters are applied to create the training set? How might you mitigate these issues?
+(d) Run your harmful content filters on text extracted from the WARC files (via your previously implemented text extraction function). Look through 20 random examples and compare the classifier predictions to your own judgments. Report any classifier errors. What fraction of documents are harmful? Based on your observations, what would be suitable classifier confidence threshold(s) to use in filtering?
