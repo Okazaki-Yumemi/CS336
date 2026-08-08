@@ -94,4 +94,93 @@ Resiliparse will also help with an even more basic problem: detecting the text e
 
 **Problem: HTML to text conversion**
 (a) Write a function that extracts text from a byte string containing raw HTML. Use resiliparse.extract.html2text.extract_plain_text to perform the extraction. This function  needs a string, so you will need to first decode the byte string into a Unicode string. Be aware that the input byte string might not be encoded in UTF-8, so your function should be able to detect the encoding in case UTF-8 fails. Resiliparse also offers resiliparse.parse.encoding.detect_encoding(), which might be useful
+
+> 见codenote1
+
 (b) Run your text extraction function on a single WARC file. Compare its output to the extracted text in the corresponding WET file. What differences and/or similarities do you notice? Which extraction seems better
+
+>提取出来的是纯文本，非常好
+
+## 2.3 Language identification
+
+The web contains pages written in thousands of languages. But training a multilingual model that can effectively make use of such diverse data at scale is challenging at most compute budgets. Thus, many language modeling training sets derived from Common Crawl contain data from a limited set of languages.
+
+A useful library for this purpose is fastText. which provides efficient text classifiers. The library provides both the infrastructure to train classifiers on your own data and a collection of pre-trained models, including for language identification. You can download the fastText language identification model. The model is available at /shared-data/classidiers/lid.176.bin
+
+Typically, language filters use a score given by classifier to decide whether to keep a given page. Use the fastText language identification classifier to implement a language identification filter , which should give a non-negative score for how confident it is in the prediction.
+
+**Problem: Language identification**
+(a) Write a function that will take a Unicode string and identify the main language that is present in this string. Your function should return a pair, containing an identifier of the language and a score between 0 and 1 representing its confidence in that prediction.
+
+> 见codenote2
+
+
+(b)  The behavior of language models at inference time largely depends on the data they were trained on. As a result, issues in the data filtering pipeline can result in problems downstream. What issues do you think could arise from problems in the language identification procedure? In a higher-stakes scenario (such as when deploying a user-facing product), how would you go about mitigating these issues?
+
+> 多保留一点有噪声的数据，和错误删除大量高质量英文数据，哪一个对最终 LM 更糟？ thershold
+
+(c) Run your language identification system on text extracted from the WARC files (via your previously-implemented text extraction function). Manually identify the language in 20 random examples and compare your labels with the classifier predictions. Report any classifier errors. What fraction of documents are English? Based on your observations, what would be a suitable classifier confidence threshold to use in filtering?
+
+```bash
+(cs336-data) (base) soyo@localhost:~/projects/CS336-2026/assignments/a4-data$ uv run cs336_data/languageIdentification.py 
+Language: zh, Confidence: 0.9608736634254456
+Language: zh, Confidence: 0.9902801513671875
+Language: zh, Confidence: 0.9242303967475891
+Language: zh, Confidence: 0.9970689415931702
+Language: zh, Confidence: 0.9923343062400818
+Language: zh, Confidence: 0.9676010608673096
+Language: zh, Confidence: 0.9651224613189697
+Language: en, Confidence: 0.7118707299232483
+Language: ru, Confidence: 0.994608461856842
+Language: ru, Confidence: 0.9790343046188354
+Language: de, Confidence: 0.9181560277938843
+Language: zh, Confidence: 0.993803858757019
+Language: zh, Confidence: 0.8872329592704773
+Language: el, Confidence: 0.9986318349838257
+Language: en, Confidence: 0.8817716836929321
+Language: zh, Confidence: 0.8872559070587158
+Language: zh, Confidence: 0.9762156009674072
+Language: zh, Confidence: 0.9676953554153442
+Language: en, Confidence: 0.11044929921627045
+Language: en, Confidence: 0.9568921327590942
+Language: en, Confidence: 0.11044929921627045
+Language: ja, Confidence: 0.9922927021980286
+Language: zh, Confidence: 0.9486950635910034
+Language: zh, Confidence: 0.9809586405754089
+Language: nl, Confidence: 0.8178791403770447
+Language: zh, Confidence: 0.9890671372413635
+Language: zh, Confidence: 0.9070631265640259
+Language: zh, Confidence: 0.9882130026817322
+Language: zh, Confidence: 0.9910210967063904
+Language: zh, Confidence: 0.6539320349693298
+Language: zh, Confidence: 0.5781425833702087
+Language: ru, Confidence: 0.9842963814735413
+Language: ru, Confidence: 0.9899467825889587
+Language: en, Confidence: 0.11044929921627045
+Language: zh, Confidence: 0.9861137270927429
+Language: zh, Confidence: 0.8912011981010437
+Language: zh, Confidence: 0.9541097283363342
+Language: zh, Confidence: 0.985442578792572
+Language: zh, Confidence: 0.9876883625984192
+Language: zh, Confidence: 0.974861741065979
+Language: zh, Confidence: 0.9778426289558411
+Language: ru, Confidence: 0.9729216694831848
+Language: zh, Confidence: 0.9601818323135376
+Language: ru, Confidence: 0.9998847246170044
+Language: en, Confidence: 0.9218418598175049
+Language: de, Confidence: 0.37443867325782776
+Language: ko, Confidence: 0.9302152991294861
+Language: en, Confidence: 0.8041372299194336
+Language: en, Confidence: 0.11044929921627045
+Language: en, Confidence: 0.926743745803833
+Language: tr, Confidence: 0.9926760196685791
+Language: en, Confidence: 0.11044929921627045
+Language: zh, Confidence: 0.9960695505142212
+Language: en, Confidence: 0.36531123518943787
+Language: en, Confidence: 0.9453595876693726
+Language: en, Confidence: 0.11044929921627045
+Language: id, Confidence: 0.8264915943145752
+Language: zh, Confidence: 0.9797539114952087
+Language: zh, Confidence: 0.9934940934181213
+Language: fr, Confidence: 0.9906957149505615
+```
