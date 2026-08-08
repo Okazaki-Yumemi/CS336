@@ -17,11 +17,16 @@ def extract_text_from_html_bytes(
     plain_text = extract_plain_text(html_text)
     return plain_text
 
-warc_path = "local-shared-data/CC/example.warc.gz"
 
-with open(warc_path, 'rb') as f:
-    for record in ArchiveIterator(f):
-        if record.record_type == WarcRecordType.response:
-            html_bytes = record.reader.read()
-            text = extract_text_from_html_bytes(html_bytes)
-            print(text)
+def main():
+    warc_path = "local-shared-data/CC/example.warc.gz"
+
+    with open(warc_path, 'rb') as f:
+        for record in ArchiveIterator(f):
+            if record.record_type == WarcRecordType.response:
+                html_bytes = record.reader.read()
+                text = extract_text_from_html_bytes(html_bytes)
+                print(text)
+
+if __name__ == "__main__":
+    main()
