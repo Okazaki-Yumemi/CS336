@@ -221,3 +221,49 @@ We will use the fasttext pre-trained models made available by the dolma project 
 (b) Write a function to detect toxic speech.
 (c) What problems do you think might arise downstream in a language model when these filters are applied to create the training set? How might you mitigate these issues?
 (d) Run your harmful content filters on text extracted from the WARC files (via your previously implemented text extraction function). Look through 20 random examples and compare the classifier predictions to your own judgments. Report any classifier errors. What fraction of documents are harmful? Based on your observations, what would be suitable classifier confidence threshold(s) to use in filtering?
+
+
+## 2.6 Quality Rules
+
+Even after filtering pages by language and removing harmful content, a substantial fraction of the pages that remain will still be of low quality.
+
+Again,while quality is not easy to define, looking through Common Crawl examples is useful for identifying examples of low quality content, such as:
+1. Pages with pay-walled content
+2. Placeholder pages for broken links
+3. Log in, sign up or contact forms
+4. Pages with primarily non-textual content, which get lost during text extraction
+
+The gopher paper describes a set of simple quality filters to remove similar simple cases of low-quality text from web-scraped data.
+
+These filters consist of simple heuristic rules that are easily understood, and they can often cover many cases of trivially unsuitable examples.
+
+The Gopher quality filters include several criteria based on document length, word length, symbol-to-word ratios, and the presence of certain English stop words. For this assignment, you will implement a subset of the filters described in the Gopher paper. Specifically, you should remove documents that:
+
+- Contain less than 50 or more than 100,000 words
+- Have a mean word length outside the range of 3 to 10 characters.
+- Have more than 30% of lines ending with an ellipsis (...)
+- Contain less than 80% of words with at least one alphabetic character
+
+**Problem: Gopher quality filters**:
+
+(a) Implement the subset of Gopher quality as described above. For tokenizing text into words, you might find the NLTK pacakage useful (specifically nltk.word_tokenize), though you're not required to use it.
+
+(b) Run your rule-based quality filter on text extracted from the WARC files (via your previously-implemented text extraction function). Look through 20 random examples and compare the filter predictions to your own judgment. Comment on any cases where the quality filters differ from your judgments.
+
+
+## 2.7 Quality classifier
+
+One of the classic signals that search engines leverage is the structure of links on the web: high-quality pages tend to link to other high-quality pages.
+
+OpenAI used a similar insight when constructing WebText.
+
+An alternative to Reddit is using Wikipedia as a source of high-quality links,since external sources linked from wikipedia pages tend to be trusted pages.
+
+
+In this part of the assignment, you will build a quality classifier. For your convenience, we have extracted the URLs of references pages from a recent Wikipedia dump and have placed them in the shared data directory at /shared-data/wiki/enwiki-20260501-extracted_urls.txt.gz. This file contains external links found on Wikipedia pages in the English language as of May of 2026, but we expect you to subsample these URLs to get positive examples of "high-quality" text for training your classifier.
+
+**Problem: Quality classifier**:
+(a) Train a quality classifier for use in the next subproblem.
+
+(b) Write a function that labels a page as high or low-quality, and provides a confidence score in the label.
+
