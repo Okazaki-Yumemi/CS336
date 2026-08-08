@@ -6,6 +6,7 @@ from cs336_data.html2text import extract_text_from_html_bytes
 from cs336_data.languageIdentification import identify_language
 from cs336_data.Pii import mask_emails,mask_phone_numbers,mask_ips
 from cs336_data.harmful import identify_nsfw, identify_hate
+from cs336_data.quality import gopher_quality_filter
 
 def run_extract_text_from_html_bytes(html_bytes: bytes) -> str | None:
     return extract_text_from_html_bytes(html_bytes)
@@ -40,7 +41,7 @@ def run_classify_quality(text: str) -> tuple[Any, float]:
 
 
 def run_gopher_quality_filter(text: str) -> bool:
-    raise NotImplementedError
+    return gopher_quality_filter(text)
 
 
 def run_exact_line_deduplication(
