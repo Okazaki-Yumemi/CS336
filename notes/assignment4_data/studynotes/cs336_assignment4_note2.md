@@ -44,3 +44,194 @@ def exact_line_dedup(
 
 Passed.
 
+## 3.2MinHash + LSH document deduplication
+
+Exact deduplication is useful for removing content that is repeated verbatim across multiple webpages,but does not handle cases where the document content slightly differs. For example, consider software license documents—— the license document is often generated from a template that requiers the year and the software author's name. As a result, the licens file for one MIT-licensed project contains largely the same content as another MIT-licensed project, but they'are not exact duplicates.
+
+To remove this type of repeated,mostly-templated content, we need fuzzy deduplication. To efficiently perform fuzzy document-level deduplication, we will use minhash with locality sensitive hashing.
+
+To perform fuzzy deduplication, we will use a particular notion of similarity between documents: the Jaccard similarity between each document's ngrams. The Jaccard similarity between sets S and T is defined as |S ∩ T| / |S ∪ T|.
+
+
+To naively perform fuzzy deduplication, we could represent each ducument as a set of n-grams, and compute the Jaccard similarity between all pairs of documents, marking pairs as duplicates if they exceed a particular Jaccard similarity threshold. However, this method is impractical for large document collections. Furthermore,naively storing a set of n-grams will take much more memory than a document.
+
+**Minhashing**:
+To address the memory concern, we replace our set of n-grams document representation with a signature. In particular, we’d like to construct signatures such that if we compare the signatures of two documents, we get an approximation of the Jaccard similarity between the documents’ respective sets of ngrams. Minhash signatures fulfill these properties. 
+
+To compute the minhash signature for a set of document n-grams S = {s1, s2, …, sn}, we will need k distinct hash functions h1, ... hk. Each hash function maps an n-gram to an integer.Given a hash function hii, the minhash of the set of document ngrams S is minhash(hi, S) = min((hi(s1), hi(s2), ..., hi(sn))).
+
+The signature of the document n-grams S is a vector in Rk, where each element i contains the minhash of S under the random hash function hi, i.em [minhash(h1, S), minhash(h2, S), ..., minhash(hk, S)].
+
+**It turns out that for two documents n-gram sets 𝑆1 and 𝑆2, the Jaccard similarity between the sets is approximated by the proportion of columns with the same minhash value**
+
+
+
+**Locality-sensitive hashing**:
+Although minhashing gives us a memory-efficient document representation that preserves the expected similarity between any document pair, we’re still left with the need to compare all pairs of documents to find those with the greatest similarity. 
+
+LSH provides a way to efficiently bucket documents that are likely to have high similarity.
+
+We will divide the signature into b bands containing r minhashesm with k = br. For example, if we have 100-element document signatures, we can break this up into 2 bands of 50 minhashes each, or 4 bands of 25 minhashes, or 50 bands of 2 minhashes, etc. If two documents have the hash values for a particular band, they will be clustered into the same bucket and will be considered as candidate duplicates. Thus, for a fixed number of signatures ,increasing the number of bands will increase recall and decrease precision.
+
+Once we've identified candidate duplicates, we can process them in a variety of ways. For example, we could compute the Jaccard similarity between all candidate duplicates and label pairs that exceed a set threshold as duplicates.
+
+Finally, we cluster duplicate documents across buckets, For example, suppose that documents A and B match in one bucket and have a true Jaccard similarity that's higher than our threshold, and that documents B and C match in another bucket and also have a true Jaccard similarity that's higher thant our threshold. The , we'd treat A,B and C as a single cluster. We randomly remove all but one of the documents in each cluster.
+
+**Problem Minhash + LSH document deduplication**:
+Write a function that takes a list of paths to input files and performs fuzzy document deduplication with minhash and LSH. 1
+
+In particular, your function should compute minhash signatures for each document in the provided list of paths, use LSH with the provided number of bands to identify candidate duplicates, and then compute the true ngram Jaccard similarity between candidate duplicates and remove those that exceed a given threshold. 
+
+To improve recall, normalize the text before computing minhash signatures and/or comparing Jaccard similarity by lowercasting, removing punctuation, normalizing whitespace, and removing accents, and applying NFD unicode normalization.
+
+```py
+import unicodedata
+
+def normalize_text(text: str) -> str:
+    """
+    Normalize text by lowercasing and removing punctuation.
+    """
+    text = unicodedata.normalize('NFD', text)
+    text = "".join(
+        c for c in text 
+        if unicodedata.category(c) != 'Mn'  # Remove diacritics
+    )
+    import re
+    text = text.lower()
+    text = re.sub(r'[^\w\s]', '', text)
+    # multiple spaces to single space
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
+ 
+def text_2_ngrams(text: str, n: int) -> set[str]:
+    """
+    Convert text to a set of n-grams.
+    """
+    words = text.split()
+    ngrams = set()
+    
+    for i in range(len(words) - n + 1):
+        ngram = ' '.join(words[i:i+n])
+        ngrams.add(ngram)
+    return ngrams
+
+def minHash_signature(ngrams: set[str], num_hashes: int) -> list[int]:
+    """
+    Compute the MinHash signature for a set of n-grams.
+    """
+    import hashlib
+    signature = []
+    for i in range(num_hashes):
+        min_hash = float('inf')
+        for ngram in ngrams:
+            hash_value = int(hashlib.md5((str(i) + ngram).encode()).hexdigest(), 16)
+            min_hash = min(min_hash, hash_value)
+        signature.append(min_hash)
+    return signature
+
+def signature_2_bands(signature: list[int], num_bands: int) -> list[tuple[int]]:
+    """
+    Convert a MinHash signature into bands for LSH
+    """
+    band_size = len(signature) // num_bands
+    bands = []
+    for i in range(num_bands):
+        start = i * band_size
+        end = start + band_size
+        bands.append(tuple(signature[start:end]))
+    return bands
+
+import os
+
+def dedup(
+    input_files: list[os.PathLike],
+    num_hashes: int,
+    num_bands: int,
+    ngrams: int,
+    jaccard_threshold: float,
+    output_directory: os.PathLike,
+):
+   # 读取文件
+    file_contents = []
+    for file_path in input_files:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            file_contents.append(f.read())
+            
+    #normalize
+    normalized_texts = [normalize_text(text) for text in file_contents]
+    
+    # 生成 n-grams
+    ngrams_list = [text_2_ngrams(text, ngrams) for text in normalized_texts]
+    
+    # 计算 MinHash 签名
+    signatures = [minHash_signature(ngrams_set, num_hashes) for ngrams_set in ngrams_list]
+    
+    # 将签名转换为 bands
+    bands_list = [signature_2_bands(signature, num_bands) for signature in signatures]
+    
+    # bands_list 是一个二维列表，每个元素是一个文件的 bands
+    # 我们需要将这些 bands 转换为一个字典，键是 band，值是文件索引的集合
+    band_dict = {}
+    for file_index, bands in enumerate(bands_list):
+        for band_index, band in enumerate(bands):
+            key = (band_index, band)
+            if key not in band_dict:
+                band_dict[key] = set()
+            band_dict[key].add(file_index)
+
+    # 对candidate pairs进行Jaccard相似度计算
+    similar_files = set()
+    for band, file_indices in band_dict.items():
+        if len(file_indices) > 1:
+            file_indices = list(file_indices)
+            for i in range(len(file_indices)):
+                for j in range(i + 1, len(file_indices)):
+                    idx1, idx2 = file_indices[i], file_indices[j]
+                    set1, set2 = ngrams_list[idx1], ngrams_list[idx2]
+                    intersection = len(set1.intersection(set2))
+                    union_size = len(set1.union(set2))
+                    jaccard_sim = intersection / union_size if union_size != 0 else 0
+                    if jaccard_sim >= jaccard_threshold:
+                        similar_files.add((idx1, idx2))
+    parent = list(range(len(input_files)))
+
+    def find(x: int) -> int:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(x: int, y: int) -> None:
+        rx, ry = find(x), find(y)
+        if rx != ry:
+            parent[ry] = rx
+    
+    for i, j in similar_files:
+        union(i,j)    
+    
+    clusters = {}
+    for i in range(len(input_files)):
+        root = find(i)
+        if root not in clusters:
+            clusters[root] = []
+        clusters[root].append(i)
+    
+    files_to_remove = set()
+    
+    for cluster in clusters.values():
+        if len(cluster) > 1:
+            # 保留第一个文件，删除其他文件
+            for idx in cluster[1:]:
+                files_to_remove.add(input_files[idx])
+    
+                    
+    # 将不重复的文件写入输出目录
+    for file_path in input_files:
+        if file_path not in files_to_remove:
+            file_name = os.path.basename(file_path)
+            output_path = os.path.join(output_directory, file_name)
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            with open(output_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+```
