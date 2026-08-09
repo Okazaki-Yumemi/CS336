@@ -9,6 +9,7 @@ from cs336_data.harmful import identify_nsfw, identify_hate
 from cs336_data.quality import gopher_quality_filter
 from cs336_data.quality_classifier import classify_quality
 from cs336_data.exactlinededup import exact_line_dedup
+from cs336_data.minHash_LSH_dedup import dedup
 
 def run_extract_text_from_html_bytes(html_bytes: bytes) -> str | None:
     return extract_text_from_html_bytes(html_bytes)
@@ -60,4 +61,4 @@ def run_minhash_deduplication(
     jaccard_threshold: float,
     output_directory: os.PathLike,
 ):
-    raise NotImplementedError
+    return dedup(input_files, num_hashes, num_bands, ngrams, jaccard_threshold, output_directory)
