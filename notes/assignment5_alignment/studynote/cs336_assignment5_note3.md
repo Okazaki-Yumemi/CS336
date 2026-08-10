@@ -334,3 +334,104 @@ backprop
         ↓
 repeat
 ```
+
+
+## 4.2 Implementing on-policy GRPO
+
+### 4.2.1 Using Hugging face Models
+
+While previous assignments used our own language model implementation in cs336_basics,in this assignment we will use the Hugging face transformers library directly to load the pre-trained base model.
+
+You're also welcome to implement your own transformer and pre-trained weight loader if you would like; just make sure the architecture matches that of OLMo-2-0425-1B.
+
+To load a Hugging Face model and tokenizer (in bfloat16 and with FlashAttention-2 to save memory), you can use the following starter code,available in cs336_alignment/checkpoint.py:
+
+```py
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+def get_model_and_tokenizer(model_id_or_dir: str, device: str):
+  model = AutoModelForCausalLM.from_pretrained(
+    model_id_or_dir,
+    device_map = device,
+    torch_dtype=  torch.bfloat16,
+    attn_implementation = "eager" if device == 'cpu' else "flash_attention_2",
+  )
+
+  tokenizer = AutoTokenizer.from_pretrained(model_id_or_dir)
+
+  return model, tokenizer
+
+```
+
+model_id_or_directory can be a model name like allenai/OLMo-2-0425-1B or the path to a directory. The directory will typically be the result of calling save_pretrained, which you can call to save your trained model:
+
+```py
+# save the model weights
+
+model.save_pretrained(save_directory = output_dir)
+tokenizer.save_pretrained(save_directory = output_dir)
+
+```
+
+First,let's implement a helper function, which uses the pre-trianed tokenizer to tokenize input prompts and responses.
+
+除了tokenize之外，还要加上prompt_ids + response_ids.
+
+
+**Problem:Prompt and output tokenization**
+把prompt和response分别tokenize，不加special token，直接拼接，然后构建一个response_mask，只在label属于response token 时为1
+
+不难，不单独设置codenote了
+```py
+import torch
+from transformers import PreTrainedTokenizerBase
+
+
+def tokenize_prompt_and_output(
+    prompt_strs: list[str],
+    output_strs: list[str],
+    tokenizer: PreTrainedTokenizerBase,
+) -> dict[str, torch.Tensor]:
+
+    all_full_ids = []
+    all_full_masks = []
+    
+    max_len = 0
+    
+    
+    for prompt,output in zip(prompt_strs,output_strs):
+        prompt_ids = tokenizer(prompt,add_special_tokens=False)["input_ids"]
+        output_ids = tokenizer(output,add_special_tokens=False)["input_ids"]
+
+        full_ids = prompt_ids + output_ids
+        
+        mask = [0]* len(prompt_ids) + [1] * len(output_ids)
+        
+        all_full_ids.append(full_ids)
+        
+        all_full_masks.append(mask)
+        
+        max_len = max(max_len, len(full_ids))
+    
+    for full_ids, full_masks in zip(all_full_ids,all_full_masks):
+        
+        len_for_pad = max_len - len(full_ids)
+        
+        full_ids += [tokenizer.pad_token_id]*len_for_pad
+        full_masks += [0]*len_for_pad
+    
+    full_ids_tensor = torch.tensor(all_full_ids)
+    
+    full_masks_tensor = torch.tensor(all_full_masks)
+    
+    input_ids = full_ids_tensor[:,:-1]
+    labels = full_ids_tensor[:,1:]
+    response_mask = full_masks_tensor[:,1:]
+    
+    return{
+        "input_ids": input_ids,
+        "labels": labels,
+        "response_mask": response_mask,
+    }
+```
