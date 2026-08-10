@@ -726,3 +726,75 @@ def compute_rollout_rewards(
     }
     return raw_rewards,metadata
 ```
+
+接下来，let's implement the core math in GRPO, which normalizes these rewards to turn them into advantages. Note that the rewards are flattened. so we need to take in the groupsize to reshape it back into groups to do normalization.
+
+**Problem: Group normalization**:
+
+Deliverable: Implement a method compute_group_normalized_rewards that normalizes raw rewards within their groups and returns the normalized rewards along with any metadata you think is useful.
+
+For now, you only need to support baseline = "mean" and advantage_normalizer = "std". Feel free to raise a NotImplementedError for unsupported inputs. In later parts of the assignment we will implement the other options and run ablations. Remember to add advantage_eps to the normalizer to avoid division by zero.
+
+
+接口:
+
+```py
+def compute_group_normalized_rewards(
+  raw_rewards: torch.Tensor,
+  group_size: int,
+  baseline: Literal["mean", "none"] = "mean",
+  advantage_eps: float = 1e-6,
+  advantage_normalizer: Literal["std", "none", "mean"] = "std",
+):
+```
+
+Return:
+
+- tuple[torch.Tensor, dict[str, float]]
+- - advantages Group-normalized rewards for each rollout response.
+- - metadata (your choice of other statistics to log)
+
+
+```py
+import torch
+from typing import Any, Callable, Literal
+
+
+def compute_group_normalized_rewards(
+    raw_rewards: torch.Tensor,
+    group_size: int,
+    baseline: Literal["mean", "none"] = "mean",
+    advantage_eps: float = 1e-6,
+    advantage_normalizer: Literal["std", "none", "mean"] = "std",
+) -> tuple[torch.Tensor, dict[str, float]]:
+    
+    grouped_rewards = raw_rewards.reshape(-1, group_size)
+    
+    if baseline != "mean":
+        raise NotImplementedError
+    
+    
+    group_mean = grouped_rewards.mean(dim= 1, keepdim= True)
+
+
+    if advantage_normalizer != "std":
+        raise NotImplementedError
+    
+    group_std = grouped_rewards.std(dim = 1, keepdim=True)
+
+    advantages_2d = (
+        grouped_rewards - group_mean
+    ) / (
+        group_std + advantage_eps
+    )
+
+    advantages = advantages_2d.reshape(-1)
+    
+    metadata = {
+        "mean":float(raw_rewards.mean())
+    }
+    
+    return  advantages,metadata
+```
+
+本质就是几次torch操作模拟数学公式，没什么要讲的。
