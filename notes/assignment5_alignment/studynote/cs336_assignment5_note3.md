@@ -513,3 +513,216 @@ def get_response_log_probs(
             "token_entropy": entropy
         }
 ```
+
+
+### 4.2.2 Using vLLM in a reinforcement learning loop
+
+In our RL loop, we'll also need to generate rollout. The specific configuration we'll use is to put the Hugging Face model and optimizer on one GPU for training, and vLLM (which includes the model and kv cache) on the other GPU.So in addition to the vLLM initialization and generation functions described in the previous section,we'll also need to sycn weights between the two devices before each inference step.
+
+We describe the weight sync code below, which is available in `cs336_alignment/vllm_utils.py`
+
+```py
+@dataclass
+class VLLMServer:
+    gpt: int = 1 #Run training on gpu 0 and inference on gpu 1
+
+    # Create the NCCL weight-transfer group between the training GPU and vLLM.
+    def init_weight_sync(self,policy_device: str): ...
+
+    # Copy the current Hugging Face policy weights into the vLLM server and
+    # reset vLLM caches that depended on the old weights.
+    def sync_policy_weights(self, policy:torch.nn.Module) -> None: ...
+
+    # Generate rollouts from the current vLLM weights.
+    def generate_completions(
+      self,
+      prompts: list[str],
+      sampling_param: dict,
+      batch_size: int | None = None,
+    ) -> list[VLLMCompletion]: ...
+```
+
+Like our prompting experiment, we'll sample with temperature 1.0, top-p  1.0, max generation length 512. The prompt asks the model to end its answer with the string </answer>, so we can direct vLLM to stop when the model outputs this string:
+
+```py
+# Based on Dr.GRPO: stop when the model completes its answer
+samling_param['stop'] = ["</answer>"]
+samling_params["include_stop_str_in_output"] = True
+```
+
+### 4.2.3 GRPO components
+
+Next,let's implement components that compute parts of the GRPO loss. Note that later on in the assignment, we will implement variants,like different advantage normalizers or importance reweighting approaches. The components below are designed so that we can swap between variants with minimal code overlap, so we've provided inferfaces with arguments that specify which variant. For this part of the assignment, you only need to implement the standard GRPO variant.
+
+Our first step will be to implement a helper function that computes the rewards of responses.
+
+**Problem: Computing the rewards of rollouts**:
+
+Implement a method `compute_rollout_reward` that calculates raw rewards for each rollout response.
+
+```py
+
+def compute_rollout_rewards(
+    reward_fn: Callable[[str,str], dict[str,float]],
+    rollout_responses: list[str],
+    repeated_ground_truths: list[str],
+) -> tuple[torch.Tensor, dict[str, float]]
+```
+
+Args:
+- reward_fn: Callable[[str,str], dict[str,float]] Scores the rollout responses against the ground truths, producing a dict with keys "reward","forward_reward", and "answer_reward".
+- rollout_responses: list[str] Rollouts from the policy. The length of this list is rollout_batch_size = n_prompts_per_rollout_batch * group_size
+- repeated_ground_truths: list[str] The ground truths for the examples. The length of this list is rollout_batch_size, because the ground truth for each example is repeated group_size times.
+
+Returns:
+
+- tuple[torch.Tensor, dict[str,floats]]
+- - raw_rewards shape (rollout_batch_size). Unnormalized rewards for each rollout response.
+- - metadata Reward statistics to log. At minimum, include the mean total and format rewards over the rollout batch.
+
+
+这边的意思就是，假设B=2 G=3，即一批有两个问题，每个问题生成三个 rollout
+
+比如：
+```
+prompt 1 的三个 rollout:
+    y11
+    y12
+    y13
+
+prompt 2 的三个 rollout:
+    y21
+    y22
+    y23
+```
+
+那么传给这个函数时， rollout_responses 已经被flatten成:
+```py
+[
+  y11,y12,y13,
+  y21,y22,y23,
+]
+```
+
+长度: $$B x G = 6 $$
+
+所以:
+```py
+repeated_ground_truths = [
+    gt1, gt1, gt1,
+    gt2, gt2, gt2,
+]
+```
+
+因此这个函数不需要知道 group_size
+
+它只需要逐项
+```
+y11 <-> gt1
+y12 <-> gt1
+y13 <-> gt1
+y21 <-> gt2
+...
+```
+
+
+`reward_fn` 到底干什么
+
+```py
+
+reward_dict = reward_fn(
+    response,
+    ground_truth,
+)
+
+```
+
+可能返回
+```py
+{
+    "reward": 1.0,
+    "format_reward": 1.0,
+    "answer_reward": 1.0,
+}
+```
+
+或者
+```py
+{
+    "reward": 0.0,
+    "format_reward": 1.0,
+    "answer_reward": 0.0,
+}
+```
+
+
+raw_rewards 是什么
+
+```
+y11 → reward 1
+y12 → reward 0
+y13 → reward 1
+
+y21 → reward 0
+y22 → reward 0
+y23 → reward 1
+```
+
+那么函数产生
+```py
+raw_rewards =
+tensor([1., 0., 1., 0., 0., 1.])
+```
+
+shape= (BG,)
+
+**metadata 又是什么**
+```
+              reward    format    answer
+rollout 1       1          1         1
+rollout 2       0          1         0
+rollout 3       0          0         0
+rollout 4       1          1         1
+```
+
+那么可以记录:
+
+$$ mean reward = \frac{1 + 0 + 0 + 1}{4} = 0.5 $$
+$$ mean format reward = \frac{1 + 1 + 0 + 1}{4} = 0.75$$
+
+```py
+import torch
+from typing import Any, Callable, Literal
+
+def compute_rollout_rewards(
+    reward_fn: Callable[[str, str], dict[str, float]],
+    rollout_responses: list[str],
+    repeated_ground_truths: list[str],
+) -> tuple[torch.Tensor, dict[str, float]]:
+    
+    raw_rewards = []
+    total_reward_sum  : float = 0
+    format_reward_sum : float = 0
+    answer_reward_sum : float = 0
+    
+    for response,ground_truth in zip(rollout_responses,repeated_ground_truths):
+        
+        result = reward_fn(response,ground_truth)
+        
+        raw_rewards.append(result["reward"])
+        
+        total_reward_sum  += result["reward"]
+        format_reward_sum += result["format_reward"]
+        answer_reward_sum += result["answer_reward"]
+        
+    raw_rewards = torch.tensor(raw_rewards,dtype = torch.float32)
+    
+    n = len(rollout_responses)
+    
+    metadata = {
+        "mean_reward": total_reward_sum/n,
+        "mean_format_reward": format_reward_sum/n,
+        "mean_answer_reward": answer_reward_sum/n,
+    }
+    return raw_rewards,metadata
+```
