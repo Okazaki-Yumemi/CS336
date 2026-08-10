@@ -435,3 +435,81 @@ def tokenize_prompt_and_output(
         "response_mask": response_mask,
     }
 ```
+
+
+Once we have a tokenized input,we can pass it through the model as follows:
+
+```py
+input_ids = train_batch["input_ids"].to(device)
+labels = train_batch["labels"].to(device)
+logits = model(input_ids).logits
+```
+
+With this syntax in hand,please implement the following method, which computes the per-token log-probabilities for a response under the model, a primitive we'll need for computing our policy gradient. In RL, it's often also useful to log the per-token entropies,so this function will include a `return_token_entropy` option you will need to implement as well.
+
+
+**Problem Response log-probs (and entropy)**
+
+Implement a method get_response_log_probs that gets per-token conditional log
+probabilities (given the previous tokens) from a causal language model, and optionally the entropy of the model’s next-token distribution
+
+```py
+
+def get_response_log_probs(
+    model:PreTrainedModel,
+    input_ids: torch.Tensor,
+    labels: torch.Tensor,
+    return_token_entropy: bool = False,
+) -> dict[str,torch.Tensor]
+```
+
+Returns
+-  dict[str, torch.Tensor]
+- - "log_probs" shape (batch_size, sequence_length),conditional log-probabilities
+- - "token_entropy" optional,shape (batch_size,sequence_length)
+
+
+关于logits怎么变成log-probs，假设某个位置的logits是
+
+[z1,z2,...,zv]
+
+先softmax,再求log
+
+也不难，不单独开codenote
+
+```py
+import torch
+import torch.nn.functional as F
+
+def get_response_log_probs(
+    model: torch.nn.Module,
+    input_ids: torch.Tensor,
+    labels: torch.Tensor,
+    return_token_entropy: bool = False,
+) -> dict[str, torch.Tensor]:
+    
+    output = model(input_ids)
+    
+    logits = output.logits
+    
+    all_log_probs = F.log_softmax(logits,dim= -1)
+    
+    token_log_probs = all_log_probs.gather(
+        dim= -1,
+        index=labels.unsqueeze(-1),
+    ).squeeze(-1) #这个地方是只要 labels对应的那个vocab的概率，别的不要。
+    
+    if not return_token_entropy:
+        return {
+            "log_probs": token_log_probs
+        }
+    else:
+        probs = all_log_probs.exp()
+        
+        entropy = -(probs*all_log_probs).sum(dim=-1)
+        
+        return {
+            "log_probs": token_log_probs,
+            "token_entropy": entropy
+        }
+```
