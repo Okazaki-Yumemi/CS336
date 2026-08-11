@@ -957,3 +957,292 @@ Before the optimizer step, the function should also clip the gradient norm to ma
 
 
 代码较长，见 `cs336_assignment5_codenote2.md`
+
+
+## 4.3 Experiments
+
+We're now ready to construct the full GROPO training loop, which should:
+
+- Load model and datasets
+- Initialize logging (e.g, Wandb) , vLLM server, optimzier
+- Perform the RL training loop
+
+We've provided some suggested hyperparameters below, It your training script is correct,you should see the validation reward increase overtime when training with these hyperparameters, for most random seeds.
+
+```py
+n_train_examples = 6400
+n_val_examples = 1024
+num_rollout_steps = 200
+learning_rate = 1e-5
+rollout_batch_size = train_batch_size = 256
+group_size = 8
+gradient_accumulation_steps = 32
+sampling_temperature = 1.0
+sampling_max_tokens = 512
+max_grad_norm = 1.0
+optimizer = torch.optim.AdamW(
+    policy.parameters(), lr=learning_rate, betas=(0.9, 0.95), weight_decay=0.0
+)
+```
+
+Note that rollout_batch_size and train_batch_size count responses,not prompts. So rollout_batch_size = train_batch_size = 256 means 32 prompts with 8 rollouts each.
+
+
+As a reasonable default, you can evaluate on the validation set once every 10 rollout batches. You should make sure to evaluate on at least 1024 validation examples, as CoT/RL evaluations can be noisy. In addition to logging the metrics described in the previous subsection, it’s also useful to log rollouts for a qualitative sense of what the model is doing. A reasonable default is to log the training rollouts for the current batch of rollouts every 40 rollout batches. Feel free to use data/gsm8k/train.jsonl for the training examples and data/gsm8k/test.jsonl for validation examples.
+
+
+
+训练metric含义
+
+| Metric            | 我们真正想知道什么                            |
+| ----------------- | ------------------------------------ |
+| `train reward`    | policy 在当前采样问题上有没有变强                 |
+| `val reward`      | 能力是否真正泛化                             |
+| `format reward`   | 是否学会输出协议                             |
+| `grad norm`       | update 是否稳定                          |
+| `token entropy`   | policy 的探索性/确定性怎么变化                  |
+| `response length` | reasoning behavior 是否发生系统变化          |
+| `loss`            | optimizer 当前 surrogate objective 的尺度 |
+| rollout examples  | 数字指标没告诉我们的行为变化                       |
+
+- GRPO loss 不要求平滑单调下降，真正的目标指标是：validation reward.
+
+- Gradient norm 是 instability detector
+
+- Token entropy 是 exploration detector
+
+- format reward 和 total reward 必须分开看
+
+- 人工看roll out避免莫名其妙的得到高分，或者模型学会作弊
+
+这个地方我们没办法做这个实验，vLLM的api我也一般熟悉，所以我们通过学习静态代码来弄吧。
+
+详细的代码和注释都在 `scripts/train_GRPO.py`
+
+
+静态学习:
+
+假设dataset:
+```
+example 0:
+question = "小明有 5 个苹果，又买了 7 个，一共有几个？"
+ground_truth = "12"
+
+example 1:
+question = "6 × 7 等于多少？"
+ground_truth = "42"
+```
+
+经过 r1_zero.prompt 包装以后
+```
+prompts = [
+    "User: 小明有 5 个苹果，又买了 7 个，一共有几个？\nAssistant: <think>",
+    "User: 6 × 7 等于多少？\nAssistant: <think>",
+]
+
+ground_truths = [
+    "12",
+    "42",
+]
+```
+
+此时
+```
+len(prompts)       = 2
+len(ground_truths) = 2
+```
+
+**现在交给vLLM**:
+
+设：
+```py
+GROUP_SIZE = 3
+```
+
+so
+```py
+sampling_params = {
+    "temperature": 1.0,
+    "max_tokens": 512,
+    "n": 3,
+    ...
+}
+```
+调用
+```py
+completions = server.generate_completions(
+    prompts=prompts,
+    sampling_params=sampling_params,
+)
+```
+
+会得到
+```
+prompt 0
+    ↓ sample 3 times
+response 0
+response 1
+response 2
+
+prompt 1
+    ↓ sample 3 times
+response 3
+response 4
+response 5
+```
+6条回答completion
+
+大概长这样
+```
+completion[0]:
+<think>5+7=12</think>
+<answer>12</answer>
+
+completion[1]:
+<think>5+7=13</think>
+<answer>13</answer>
+
+completion[2]:
+<think>5+7=12</think>
+<answer>12</answer>
+
+
+completion[3]:
+<think>6*7=36</think>
+<answer>36</answer>
+
+completion[4]:
+<think>6*7=48</think>
+<answer>48</answer>
+
+completion[5]:
+<think>6*7=42</think>
+<answer>42</answer>
+```
+
+所以
+```py
+rollout_responses = [
+    response_0,
+    response_1,
+    response_2,
+    response_3,
+    response_4,
+    response_5,
+]
+```
+
+```
+index       prompt       response       ground truth
+----------------------------------------------------
+0           prompt 0     response 0         12
+1           prompt 0     response 1         12
+2           prompt 0     response 2         12
+
+3           prompt 1     response 3         42
+4           prompt 1     response 4         42
+5           prompt 1     response 5         42
+```
+
+
+
+现在：·
+```py
+prompts
+```
+only has 2
+```py
+[prompt0, prompt1]
+```
+
+but there are 6  responses.
+
+so we repeat the prompt for G times
+
+```py
+repeated_prompts = [
+    prompt0,
+    prompt0,
+    prompt0,
+
+    prompt1,
+    prompt1,
+    prompt1,
+]
+```
+
+The same for ground truths
+```py
+repeated_ground_truths = [
+    "12",
+    "12",
+    "12",
+
+    "42",
+    "42",
+    "42",
+]
+```
+
+
+Now:
+```py
+repeated_prompts:
+[p0, p0, p0, p1, p1, p1]
+
+rollout_responses:
+[r0, r1, r2, r3, r4, r5]
+
+repeated_ground_truths:
+[12, 12, 12, 42, 42, 42]
+```
+
+然后调用reward函数,得到
+```py
+raw_rewards =
+tensor([
+    1., 0., 1.,
+    0., 0., 1.,
+])
+```
+
+然后reshape成
+```
+tensor([
+    [1., 0., 1.],
+    [0., 0., 1.],
+])
+```
+
+然后算advantage
+```py
+advantages =
+tensor([
+     0.577,
+    -1.155,
+     0.577,
+
+    -0.577,
+    -0.577,
+     1.155,
+])
+```
+
+然后tokenization做
+```py
+tokenize_prompt_and_output(
+    repeated_prompts,
+    rollout_responses,
+    tokenizer,
+)
+```
+得到id之类的东西。
+
+现在切microbatch，走我们之前的那个训练step
+
+
+
+最后回到vllm
+```py
+vllm_server.sync_policy_weights(policy)
+```
