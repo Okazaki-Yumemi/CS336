@@ -51,9 +51,16 @@ def grpo_train_step(
         advantage_normalizer,
     )
     
+    keep_mask = (advantages != 0 )
+    # ====== pruning ======
+    kept_prompts = [prompt for prompt,keep in zip(repeated_prompts,keep_mask) if keep]
+    keep_responses = [response for response, keep in zip(rollout_responses, keep_mask) if keep]
+    kept_advantages = advantages[keep_mask]
+    
+   
     tokenized = tokenize_prompt_and_output(
-        repeated_prompts,
-        rollout_responses,
+        kept_prompts,
+        keep_responses,
         tokenizer
     )
     
@@ -67,11 +74,13 @@ def grpo_train_step(
     labels = tokenized["labels"]
     response_mask = tokenized["response_mask"]
     
-    for i in range(0, full_batch_size, microbatch_size):
+    kept_batchsize = len(kept_prompts)
+    
+    for i in range(0, kept_batchsize, microbatch_size):
         input_id_sliced = input_ids[i:i+microbatch_size]
         labels_sliced   = labels[i:i+microbatch_size]
         response_mask_sliced = response_mask[i:i+microbatch_size]
-        advantages_sliced = advantages[i:i+microbatch_size]
+        advantages_sliced = kept_advantages[i:i+microbatch_size]
         
         actual_microbatch_size = input_id_sliced.shape[0]
         
@@ -100,13 +109,20 @@ def grpo_train_step(
             per_token_loss,
             response_mask_sliced,
             loss_normalization,
+            normalization_constant,
         )
+         
+        if loss_normalization == "sequence":
+            backward_loss = (
+                microbatch_loss * actual_microbatch_size
+            ) / full_batch_size
         
-        scaled_loss = microbatch_loss * actual_microbatch_size / full_batch_size
+        elif loss_normalization == "constant":
+            backward_loss = microbatch_loss
+
+        backward_loss.backward()
         
-        scaled_loss.backward()
-        
-        total_loss += scaled_loss.detach()
+        total_loss += backward_loss.detach()
         
         entropy_sum += (token_entropy.detach() * response_mask_sliced).sum()
         entropy_count += response_mask_sliced.sum()
