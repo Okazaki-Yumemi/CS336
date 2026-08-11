@@ -159,3 +159,48 @@ def aggregate_loss_across_microbatch(
 这个地方如果是constant的话，就不和sequence_loss那样自己去除以自己的长度，而是除以一个固定的normalization_constant。
 
 最后用的也是求和，而非平均。
+
+## 5.2 Rejection fine tuning
+
+The next ablation we’ll look into is a much simpler algorithm, typically referred to as “rejection fine tuning” (RFT) or “expert iteration” (EI)
+
+As the name suggests, the algorithm involves sampling a bunch of rollouts, keeping the ones that are correct, and then doing supervised fine tuning on these correct rollouts.
+
+Specifically,our RFT gradient is:
+
+![alt text](image-11.png)
+
+where 𝑍 is a constant normalizer (like in Dr. GRPO),
+
+然后 1{...} is an indicator function which keeps only correct responses.
+
+In the following problem, we’ll think about whether the RFT gradient is actually a policy gradient,and how it relates to GRPO.
+
+RFT对错误的rollout直接丢弃,只保留正确的rollout,然后对这些正确的rollout做supervised fine tuning。
+
+刚刚的DR.GPRO 还是 Aj = rj - μ， μ还是group的平均
+但是RFT这里就直接用 rj了
+
+举例子来说，设G = 4 reward =  [1,0,1,0]  RFT 直接为 [1,0,1,0]
+
+Dr.GRPO 要减去 group mean μ = 0.5, 所以 Dr.GRPO 为 [0.5,-0.5,0.5,-0.5]
+
+注意，RFT仍然是一个policy gradient, 但是它的baseline是0, 而不是group mean。
+
+**RFT 和 Dr. GRPO 的 expectation 一样吗？**
+
+数学期望是不同的，Dr.GRPO因为group mean里面包含了当前的这个sample自己，所以引入了 G-1/G的缩放
+
+另外一个差异是，当答案全对的时候，Dr.GRPO的gradient是0，而RFT的gradient是非0的。这个时候Dr.GRPO不会做出反应、学习之类的，而RFT会继续模仿
+
+|                | RFT                            | Dr. GRPO                       |
+| -------------- | ------------------------------ | ------------------------------ |
+| advantage      | $r$                            | $r-\mu$                        |
+| correct sample | reinforce                      | relative reinforce             |
+| wrong sample   | ignore                         | suppress if group mixed        |
+| all wrong      | zero gradient                  | zero gradient                  |
+| all correct    | **still train**                | **zero gradient**              |
+| expectation    | $\frac GZ\nabla J$             | $\frac{G-1}{Z}\nabla J$        |
+| variance       | generally higher               | generally lower due baseline   |
+| compute        | can drop all wrong samples     | can drop zero-advantage groups |
+| interpretation | self-training/SFT on successes | group-relative policy gradient |
