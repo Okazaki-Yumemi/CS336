@@ -37,7 +37,14 @@ def compute_group_normalized_rewards(
         )
         
     if advantage_normalizer == "mean":
-        raise NotImplementedError
+        group_mean = grouped_rewards.mean(dim=1, keepdim=True)
+        
+        advantages_2d = (
+            centered_rewards
+        ) / (
+            group_mean
+        )
+        
     # ================================================================
 
     advantages = advantages_2d.reshape(-1)
