@@ -42,7 +42,7 @@ def compute_group_normalized_rewards(
         advantages_2d = (
             centered_rewards
         ) / (
-            group_mean
+            group_mean + advantage_eps
         )
         
     # ================================================================

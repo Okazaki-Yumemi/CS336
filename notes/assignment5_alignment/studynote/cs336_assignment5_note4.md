@@ -204,3 +204,121 @@ Dr.GRPO 要减去 group mean μ = 0.5, 所以 Dr.GRPO 为 [0.5,-0.5,0.5,-0.5]
 | variance       | generally higher               | generally lower due baseline   |
 | compute        | can drop all wrong samples     | can drop zero-advantage groups |
 | interpretation | self-training/SFT on successes | group-relative policy gradient |
+
+
+## 5.3 MaxRL
+
+MaxRL选择的是除以 group mean μ , 而不是 GRPO 的 group std,也不是DR.GRPO的不除
+
+假设我们已经有了
+
+$$ \mu_i = \frac{1}{G} \sum_{j=1}^{G} r_{i,j} $$
+
+Dr.GRPO:
+
+$$ A_{ij} = r_{ij} - \mu_i $$
+
+标准GRPO:
+
+$$ A_{ij} = \frac{r_{ij} - \mu_i}{std_i + \epsilon} $$
+
+MaxRL:
+
+$$ A_{ij} = \frac{r_{ij} - \mu_i}{\mu_i + \epsilon} $$
+
+
+**Intuition**: 除以Mean会强调难题,这是 MaxRL 最核心的 intuition
+
+对 binary reward,某个问题的 group mean其实就是这个prompt的经验成功率
+
+μ 大 → 当前模型觉得这个问题容易
+μ 小 → 当前模型觉得这个问题难
+
+
+而 MaxRL 又除以 μ，所以苦难问题会被放大
+
+举个例子来看，一个问题8个response
+reward: [1,0,0,0,0,0,0,0]  μ = 1/8 = 0.125
+
+MaxRL:
+
+对唯一正确的
+$$ A_{correct} = \frac{1 - 0.125}{0.125}= 7 $$
+
+对于错误的
+$$ A_{wrong} = \frac{0 - 0.125}{0.125}= -1 $$
+
+在一个很难的问题，偶然探索出来的成功trajectory会得到非常强的reinforcement
+
+同理，对于一个很简单的问题，偶然的一个错误的response也会得到非常强的惩罚
+
+
+一个对比:
+
+| 成功率 (\mu) |  Dr 正确 |  Dr 错误 | MaxRL 正确 | MaxRL 错误 |
+| --------: | -----: | -----: | -------: | -------: |
+|     0.125 | +0.875 | −0.125 |   **+7** |       −1 |
+|       0.5 |   +0.5 |   −0.5 |       +1 |       −1 |
+|     0.875 | +0.125 | −0.875 |   +0.143 |       −1 |
+
+Dr. GRPO：
+
+>“相对于这个问题的平均水平，你这条 trajectory 好多少/坏多少？”
+
+MaxRL：
+
+>“困难问题上的成功特别珍贵，我要把它放大。”
+
+
+定义
+
+$$ \eta(x) = E_{y \sim \pi_\theta} [r(x,y)] $$
+
+对于binary reward, η(x)就是这个prompt的经验成功率
+
+当 G趋于无穷
+
+$$ \mu \to \eta(x) $$
+
+**Problem**:
+
+6.1 Dr. GRPO 对应什么 reweighting?
+
+Dr.GRPO 不根据difficulty重加权prompts
+
+最后得到的
+$$ w_{Dr}(x) = 1 $$
+
+标准 GRPO 呢?
+
+$$ w_{GRPO}{x} = \frac{1}{\sqrt{\eta(x)(1-\eta(x))}} $$
+
+这个会强调两端
+
+```
+very hard                medium                 very easy
+η≈0                      η≈0.5                  η≈1
+ ↑                         ↓                      ↑
+large weight             smallest              large weight
+```
+
+MaxRL
+
+$$ w_{MaxRL}(x) = \frac{1}{\eta(x)} $$
+
+MaxRL 最大化每个prompt 成功概率的log
+
+既然如此，代码实现也很明显了。
+
+步骤就是计算平均，然后除以这个平均。
+
+```py
+if advantage_normalizer == "mean":
+        group_mean = grouped_rewards.mean(dim=1, keepdim=True)
+        
+        advantages_2d = (
+            centered_rewards
+        ) / (
+            group_mean
+        )
+```
