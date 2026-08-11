@@ -381,3 +381,106 @@ Update your grpo_train_step method to support the full range of on-policy varian
 
 就这样.
 
+
+
+测试:
+
+| Method        | baseline | advantage norm | loss norm |
+| ------------- | -------- | -------------- | --------- |
+| Standard GRPO | mean     | std            | sequence  |
+| GRPO_constant | mean     | std            | constant  |
+| Dr. GRPO      | mean     | none           | constant  |
+| RFT           | none     | none           | constant  |
+| MaxRL         | mean     | mean           | constant  |
+
+实验不是“5 个完全不同算法打一架”，而是一层一层拆设计选择
+
+```
+Standard GRPO
+      │
+      │ 去掉 sequence normalization
+      ▼
+GRPO_constant
+      │
+      │ 去掉 std normalization
+      ▼
+Dr. GRPO
+```
+
+然后以 constant-normalized 框架为基础，再看
+
+```
+Dr. GRPO ── 去掉 baseline ──> RFT
+
+Dr. GRPO ── 改成 / mean ──> MaxRL
+```
+
+
+**Standard GRPO -> GRPO_constant**:
+
+$$ \frac{1}{L_{i}} \sum_{t} l_{it} \to \frac{1}{Z} \sum_{t} l_{it} $$
+
+来看 sequence normalization 到底是不是一个好主意
+
+**GRPO_constant -> Dr. GRPO**:
+
+$$ \frac{r-\mu}{\sigma} -> r-\mu $$
+
+验证: std normalization 是有益的 stability trick，还是会因为改变 prompt weighting 而伤害优化目标？
+
+**Dr.GRPO -> RFT**:
+
+从
+$$ A = r - \mu \to A = r $$
+
+看看baseline到底有没有意义
+
+与此同时还有RTF的计算pruning优势
+
+**Dr.GRPO -> MaxRL**: hard-example mining是否有帮助?
+
+MaxRL:
+
+$$ A = \frac{r - \mu}{\mu + \epsilon}$$
+
+把更多 optimization weight 放到困难 prompt 上，会不会让 reasoning 学得更快、更好？
+
+
+```
+① final validation reward
+        ↓
+谁最终能力最好？
+
+② learning speed
+        ↓
+谁更快达到 20%, 25%, ...？
+
+③ 4-seed spread
+        ↓
+结果可靠吗？
+
+④ grad norm + entropy
+        ↓
+为什么某方法稳定/不稳定？
+
+⑤ response length
+        ↓
+length normalization 是否改变 behavior？
+
+⑥ format reward
+        ↓
+提升是不是只来自 protocol learning？
+
+⑦ rollout examples
+        ↓
+reasoning 到底发生了什么变化？
+```
+
+| Method        | 它在验证什么                           | 我会重点观察                           |
+| ------------- | -------------------------------- | -------------------------------- |
+| GRPO_constant | sequence normalization 是否有害      | reward、response length           |
+| Dr. GRPO      | std normalization 是否值得           | reward、grad norm、variance        |
+| RFT           | baseline / negative updates 是否必要 | reward、variance、pruning speed    |
+| MaxRL         | hard-prompt reweighting 是否有效     | reward、grad spikes、seed variance |
+
+
