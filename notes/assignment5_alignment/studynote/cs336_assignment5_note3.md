@@ -798,3 +798,58 @@ def compute_group_normalized_rewards(
 ```
 
 本质就是几次torch操作模拟数学公式，没什么要讲的。
+
+
+下一步就是写计算梯度的函数了。
+
+我们这里要写的和Algorithm 1 的不大一样，这里是: write a pertoken loss such that taking the gradient produces each term of GRPO gradient estimator.
+
+This expression is not a loss in the traditional sense, where we expect it to go down during training. It's just an expression such that when we take the gradient , we get the policy gradient.
+
+The specific loss you should implement is:
+
+![alt text](image-9.png)
+
+
+Handout 明确把工作拆成了两步，compute_policy_gradient_loss 只产生per-token loss,下一题aggregate_loss_across_microbatch才负责做平均
+
+
+把求和拿掉，实际上剩下的只有
+
+$$ A_{ij}log\pi_\theta(y_{t}|x,y_{<t})$$
+
+`compute_group_normalized_rewards` 已经得到的每个rollout的 Ai
+
+`get_response_log_probs` 已经得到每个token的 log pi
+
+所以我们只需要把他们逐元素相乘，返回值需要取负，因为optimizer.step() 实际上是朝着反方向走
+
+```py
+from typing import Literal
+
+import torch
+
+def compute_policy_gradient_loss(
+    raw_rewards_or_advantages: torch.Tensor,
+    policy_log_probs: torch.Tensor,
+    importance_reweighting_method: Literal["none", "noclip", "grpo", "gspo"] = "none",
+    old_log_probs: torch.Tensor | None = None,
+    cliprange: float | None = None,
+    response_mask: torch.Tensor | None = None,
+) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+    
+    if importance_reweighting_method != "none":
+        raise NotImplementedError
+    
+    if raw_rewards_or_advantages.ndim == 1:
+        # (B,) -> (B,1)
+        raw_rewards_or_advantages = raw_rewards_or_advantages.unsqueeze(-1)
+    
+    per_token_loss = - raw_rewards_or_advantages * policy_log_probs
+    
+    metadata = {}
+    
+    return per_token_loss,metadata
+```
+
+主要是处理形状不同的情况，因为题目提到过 raw_rewards_or_advantages 传入的形状可能是(B,) or (B,1) 所有都得扩容到(B,1)
