@@ -12,23 +12,33 @@ def compute_group_normalized_rewards(
     
     grouped_rewards = raw_rewards.reshape(-1, group_size)
     
-    if baseline != "mean":
+    if baseline == "none":
+        centered_rewards = grouped_rewards
+    
+    if baseline == "mean":
+        centered_rewards = grouped_rewards - grouped_rewards.mean(dim= 1, keepdim= True)
+
+    # Normalize phase
+    # ================================================================
+    if advantage_normalizer == "none":
+        
+        advantages_2d = (
+            centered_rewards
+        ) 
+        
+        
+    if advantage_normalizer == "std":
+        group_std = grouped_rewards.std(dim = 1, keepdim=True)
+
+        advantages_2d = (
+            centered_rewards
+        ) / (
+            group_std + advantage_eps
+        )
+        
+    if advantage_normalizer == "mean":
         raise NotImplementedError
-    
-    
-    group_mean = grouped_rewards.mean(dim= 1, keepdim= True)
-
-
-    if advantage_normalizer != "std":
-        raise NotImplementedError
-    
-    group_std = grouped_rewards.std(dim = 1, keepdim=True)
-
-    advantages_2d = (
-        grouped_rewards - group_mean
-    ) / (
-        group_std + advantage_eps
-    )
+    # ================================================================
 
     advantages = advantages_2d.reshape(-1)
     
