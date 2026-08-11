@@ -889,3 +889,71 @@ def aggregate_loss_across_microbatch(
 
 mask的True or false可以用作 1 和 0 来计算，因此，逐元素乘法是最简单的方式
 
+
+
+### 4.2.4 GRPO training step
+
+We're now ready to piece these components together into a full training step.
+
+**Gradient Accumulation**:
+We need a large batch size to get good utilization during inference. As a result, in on-policy RL,where we set our train batch size equal to our  inference batch size, our GPU will not have enough memory to compute the gradient on the entire batch at once. 
+
+Therefore , we'll need to split the batch into a series of *microbatches* and accumulate the gradient across these microbatches. The main tricky part is to handle normalization properly to ensure that the microbatch-accumulated gradient is equivalent to computing the gradient on the whole batch.
+
+
+Gradient accumulation is straightforward to implement in PyTorch. Recall that each weight tensor has an attribute .grad that the stores its gradient. Before we call `loss.backward()`, the .grad attribute is None. After we call `loss.backward()` , the .grad attribute contains the gradient. Normally, we'd take an optimizer step , and then zero the gradient with `optimizer.zero_grad()`.
+
+```py
+
+# Forward pass.
+logits = model(inputs)
+loss = loss_fn(logits, labels)
+
+# Backward pass.
+loss.backward()
+
+# Update weights
+optimizer.step()
+# Zero gradient in preparation for next iteration.
+optimizer.zero_grad()
+```
+
+Assuming sequence normalization, where we first average loss over each sequence and then across sequences, after computing the average microbatch loss we’ll also need to reweight by the number of sequences.
+
+```py
+
+gradient_accumulation_step = 4
+microbatch_size = len(inputs) // gradient_accumulation_step
+for i in range(0, len(inputs), microbatch_size):
+    inputs_microbatch = inputs[i:i+microbatch_size]
+    labels_microbatch = labels[i:i+microbatch_size]
+
+    # forward pass
+    logits = model(inputs_microbatch)
+    loss = loss_fn(logits, labels_microbatch) * (len(inputs_microbatch) / len(inputs))
+
+    # Backward pass.
+    loss.backward()
+
+# Update weights
+optimizer.step()
+# Zero gradient in preparation for next iteration.
+optimizer.zero_grad()
+```
+
+
+**Implementing the train step**:
+
+The function will take in the model, tokenizer, optimizer, reward function , prompts and rollouts, and various hyperparameters, and it will accumulate gradients and take an optimizer step.
+
+You will need to implement gradient accumulation, as described above, to not run out of memory.
+
+Before the optimizer step, the function should also clip the gradient norm to max_grad_norm. The function should then return the training loss on the batch , along with metadata,both for logging, Please log at least the following:
+
+- The loss
+- Gradient norm
+- Token entropy
+- Train rewards (total,format)
+
+
+代码较长，见 `cs336_assignment5_codenote2.md`
