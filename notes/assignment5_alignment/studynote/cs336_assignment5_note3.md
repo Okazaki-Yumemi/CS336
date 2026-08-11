@@ -853,3 +853,39 @@ def compute_policy_gradient_loss(
 ```
 
 主要是处理形状不同的情况，因为题目提到过 raw_rewards_or_advantages 传入的形状可能是(B,) or (B,1) 所有都得扩容到(B,1)
+
+
+Finally,let's implement the aggragation function over tokens and sequences, whichi in standard GRPO involves averaging over tokens in each sequence, and then averaging over sequences.
+
+**Problem: Aggregate loss across tokens and sequences**:
+
+标准GRPO是再每条sequence上面平均，再在batch上面平均。
+
+上一题已经得到per_token_policy_gradient_loss, shape(B,L),先mask，在每条sequence上面平均，再在batch上面平均。
+
+```py
+def aggregate_loss_across_microbatch(
+    per_token_policy_gradient_loss: torch.Tensor,
+    mask: torch.Tensor,
+    loss_normalization: Literal["sequence","constant"] = "sequence",
+    normalization_constant: int | None = None,
+)-> torch.Tensor:
+    
+    if loss_normalization != "sequence":
+        raise NotImplementedError
+    
+    masked_loss = per_token_policy_gradient_loss * mask
+    
+    loss_sum = masked_loss.sum(dim= 1)
+    
+    token_count = mask.sum(dim=1)
+    
+    sequence_loss = loss_sum / token_count
+    
+    final_loss = sequence_loss.mean(dim=0)
+    
+    return final_loss
+```
+
+mask的True or false可以用作 1 和 0 来计算，因此，逐元素乘法是最简单的方式
+
