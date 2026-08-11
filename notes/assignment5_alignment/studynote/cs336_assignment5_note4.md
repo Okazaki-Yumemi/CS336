@@ -322,3 +322,62 @@ if advantage_normalizer == "mean":
             group_mean + advantage_eps
         )
 ```
+
+## 5.4 Experiments
+
+We're now ready to run experiments to explore these different policy gradient estimators.
+
+First , we'll need to update our `grpo_train_step` method to support these variations,whose components we implemented above. The specific settings are as follows:
+
+- GRPO_constant: baseline = "mean", advantage_normalizer = "std", loss_normalization = "constant"
+- Dr_GRPO: baseline = "mean", advantage_normalizer = "none", loss_normalization = "constant"
+- RFT: baseline = "none", advantage_normalizer = "none", loss_normalization = "constant"
+- MaxRL: baseline = "mean", advantage_normalizer = "mean", loss_normalization = "constant"
+
+To speed up training, note that once we've computed normalized advantages for each sequence, sequences with zero advantage don't need to be passed into the model since their contribution to the gradient is zero. Since our rewards are binary, sequences will have zero advantage in two cases:
+
+- If baseline = "mean", the sequence in a group will have zero advantage if they all have the same reward.
+- If baseline = "none", any sequences with zero reward will have zero advantage.
+
+Once we prune zero-advantage sequences,we can also reduce `gradient_accumulation_steps` by the same factor: for exam,if half the sequences have zero advantage,we can take k/2 grad accum steps instead of k grad steps.
+
+This optimization can be especially helpful for RFT, which will have quite a few zero-reward sequences. But you should be careful with your math and implementation to ensure that your pruned version computes the same gradient as the unpruned version.
+
+**Problem: GRPO train step variants**:
+
+Update your grpo_train_step method to support the full range of on-policy variants (still with importance_reweighting_method = "none"). These options include baseline: Literal["mean", "none"], advantage_normalizer: Literal["std", "none", "mean"], and loss_normalization: Literal["sequence", "constant"]. Also, to speed up training, your method should avoid passing zero advantage sequences into the model.
+
+
+核心的变化如下:
+
+
+```py
+        if loss_normalization == "sequence":
+            backward_loss = (
+                microbatch_loss * actual_microbatch_size
+            ) / full_batch_size
+        
+        elif loss_normalization == "constant":
+            backward_loss = microbatch_loss
+```
+
+这个地方是因为，sequence的过程中，我们是1/M(...) 最终要的是 (1/N), 所以就得在这个地方做一个计算。
+
+而如果是constant的话，没有这个问题，直接就是microbatch_loss就行了。
+
+
+```py
+
+    keep_mask = (advantages != 0 )
+    # ====== pruning ======
+    kept_prompts = [prompt for prompt,keep in zip(repeated_prompts,keep_mask) if keep]
+    keep_responses = [response for response, keep in zip(rollout_responses, keep_mask) if keep]
+    kept_advantages = advantages[keep_mask]
+```
+
+这个地方是保持剪枝，去掉那些advantage为0的prompt和response。
+
+但是不要覆盖原始的size之类的东西，因为他们只是被删除不算，其占位置的作用并没有消失，如果去除会导致最后的gradient错位。
+
+就这样.
+
