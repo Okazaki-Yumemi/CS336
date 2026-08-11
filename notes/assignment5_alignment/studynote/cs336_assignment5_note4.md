@@ -243,10 +243,10 @@ reward: [1,0,0,0,0,0,0,0]  μ = 1/8 = 0.125
 MaxRL:
 
 对唯一正确的
-$$ A_{correct} = \frac{1 - 0.125}{0.125}= 7 $$
+$$ A_{correct} = \frac{1 - 0.125}{0.125 + \epsilon} \approx 7 $$
 
 对于错误的
-$$ A_{wrong} = \frac{0 - 0.125}{0.125}= -1 $$
+$$ A_{wrong} = \frac{0 - 0.125}{0.125 + \epsilon} \approx -1 $$
 
 在一个很难的问题，偶然探索出来的成功trajectory会得到非常强的reinforcement
 
@@ -319,6 +319,6 @@ if advantage_normalizer == "mean":
         advantages_2d = (
             centered_rewards
         ) / (
-            group_mean
+            group_mean + advantage_eps
         )
 ```
