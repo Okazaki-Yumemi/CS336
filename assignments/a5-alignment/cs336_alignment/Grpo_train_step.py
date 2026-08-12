@@ -57,6 +57,10 @@ def grpo_train_step(
     keep_responses = [response for response, keep in zip(rollout_responses, keep_mask) if keep]
     kept_advantages = advantages[keep_mask]
     
+    if importance_reweighting_method != "none":
+        assert old_log_probs != None
+        kept_old_log_probs = old_log_probs[keep_mask]
+    
    
     tokenized = tokenize_prompt_and_output(
         kept_prompts,
@@ -89,12 +93,14 @@ def grpo_train_step(
         response_mask_sliced = response_mask_sliced.to(device)
         advantages_sliced = advantages_sliced.to(device)
         
-        if importance_reweighting_method is not None:
+        if importance_reweighting_method != "none":
             
             if old_log_probs is None:
                 raise ValueError
             
-            old_log_probs_sliced = old_log_probs[i:i+microbatch_size]
+            old_log_probs_sliced = kept_old_log_probs[i:i+microbatch_size]
+        else:
+            old_log_probs_sliced = None
         
         
         log_dict = get_response_log_probs(
