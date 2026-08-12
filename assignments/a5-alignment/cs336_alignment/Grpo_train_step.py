@@ -99,6 +99,8 @@ def grpo_train_step(
                 raise ValueError
             
             old_log_probs_sliced = kept_old_log_probs[i:i+microbatch_size]
+            
+            old_log_probs_sliced = old_log_probs_sliced.to(device)
         else:
             old_log_probs_sliced = None
         
