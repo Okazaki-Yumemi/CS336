@@ -11,14 +11,85 @@ def compute_policy_gradient_loss(
     response_mask: torch.Tensor | None = None,
 ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
     
-    if importance_reweighting_method != "none":
-        raise NotImplementedError
     
+    # === shaping ===
     if raw_rewards_or_advantages.ndim == 1:
         # (B,) -> (B,1)
-        raw_rewards_or_advantages = raw_rewards_or_advantages.unsqueeze(-1)
+        advantages = raw_rewards_or_advantages.unsqueeze(-1)
+    else:
+        advantages = raw_rewards_or_advantages
     
-    per_token_loss = - raw_rewards_or_advantages * policy_log_probs
+    
+    
+    if importance_reweighting_method == "none":
+        per_token_loss = - advantages * policy_log_probs
+    
+    elif importance_reweighting_method == "noclip":
+        
+        if old_log_probs == None:
+            raise ValueError
+        
+        ratio = torch.exp(policy_log_probs - old_log_probs)
+
+        objective = advantages * ratio
+
+        per_token_loss = - objective
+    
+    elif importance_reweighting_method == "grpo":
+    
+        if old_log_probs == None:
+            raise ValueError
+                
+        ratio = torch.exp(policy_log_probs - old_log_probs)
+
+        unclipped_objective = advantages * ratio
+        
+        if cliprange == None:
+            raise ValueError
+        
+        clipped_ratio = torch.clamp(ratio, 1-cliprange, 1+cliprange)
+
+        clipped_objective = advantages * clipped_ratio
+        
+        objective = torch.minimum(
+            unclipped_objective,
+            clipped_objective,
+        )
+    
+        per_token_loss = - objective
+        
+    elif importance_reweighting_method == "gspo":
+        
+        if old_log_probs == None:
+            raise ValueError
+        if cliprange == None:
+            raise ValueError
+        if response_mask == None:
+            raise ValueError
+        
+        log_ratio = policy_log_probs - old_log_probs
+        
+        masked_log_ratio = log_ratio * response_mask
+        
+        response_length = response_mask.sum(dim = 1, keepdim= True)
+        
+        mean_log_ratio = masked_log_ratio.sum(dim=1, keepdim=True) / response_length
+        
+        sequence_ratio = torch.exp(mean_log_ratio)
+        
+        unclipped_objective = advantages * sequence_ratio
+        
+        clipped_ratio = torch.clamp(sequence_ratio,1-cliprange,1+cliprange)
+        
+        clipped_objective = advantages * clipped_ratio
+        
+        objective = torch.minimum(
+            unclipped_objective,
+            clipped_objective,
+        )
+        
+        per_token_loss = - objective.expand_as(policy_log_probs)
+        
     
     metadata = {}
     
