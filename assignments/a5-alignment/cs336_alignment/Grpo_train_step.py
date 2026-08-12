@@ -89,6 +89,14 @@ def grpo_train_step(
         response_mask_sliced = response_mask_sliced.to(device)
         advantages_sliced = advantages_sliced.to(device)
         
+        if importance_reweighting_method is not None:
+            
+            if old_log_probs is None:
+                raise ValueError
+            
+            old_log_probs_sliced = old_log_probs[i:i+microbatch_size]
+        
+        
         log_dict = get_response_log_probs(
             model,
             input_id_sliced,
@@ -99,10 +107,14 @@ def grpo_train_step(
         log_probs = log_dict["log_probs"]
         token_entropy = log_dict["token_entropy"]
 
+        
         per_token_loss,_ = compute_policy_gradient_loss(
             advantages_sliced,
             log_probs,
             importance_reweighting_method,
+            old_log_probs_sliced,
+            cliprange,
+            response_mask_sliced
         )
         
         microbatch_loss = aggregate_loss_across_microbatch(
